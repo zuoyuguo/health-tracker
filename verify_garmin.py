@@ -42,12 +42,13 @@ def main():
         raw_activities = fetch_yesterday_activities(client.garmin)
         if not raw_activities:
             print("  昨日无活动记录")
-        for raw in raw_activities:
-            act = parse_activity(raw)
-            print(f"\n  活动类型: {act['activity_type']}")
-            for key, val in act.items():
-                if key != "activity_type":
-                    print(f"    {key}: {val}")
+        else:
+            for raw in raw_activities:
+                act = parse_activity(raw)
+                print(f"\n  活动类型: {act['activity_type']}")
+                for key, val in act.items():
+                    if key != "activity_type":
+                        print(f"    {key}: {val}")
     except Exception as e:
         print(f"活动数据获取失败：{e}")
 
