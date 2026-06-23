@@ -94,12 +94,12 @@ def test_garmin_sync_job_skips_upsert_when_sleep_date_missing():
     mock_upsert.assert_not_called()
 
 
-def test_create_scheduler_returns_scheduler_with_three_jobs():
+def test_create_scheduler_returns_scheduler_with_four_jobs():
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = sched_mod.create_scheduler()
     assert isinstance(scheduler, BackgroundScheduler)
     jobs = scheduler.get_jobs()
-    assert len(jobs) == 3
+    assert len(jobs) == 4
     for job in jobs:
         assert job.trigger.__class__.__name__ == "CronTrigger"
 
@@ -212,3 +212,69 @@ def test_daily_report_job_sends_alert_on_failure():
     mock_alert.assert_called_once()
     alert_text = mock_alert.call_args[0][0]
     assert "日报" in alert_text or "失败" in alert_text
+
+
+# --- weekly_report_job tests ---
+
+def test_weekly_report_job_sends_alert_when_report_returned():
+    mock_session = MagicMock()
+    report_text = "📊 本周周报内容"
+
+    with patch("scheduler.SessionLocal") as MockSession, \
+         patch("scheduler.generate_weekly_report", return_value=report_text) as mock_report, \
+         patch("scheduler.send_alert") as mock_alert:
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        sched_mod.weekly_report_job()
+
+    mock_report.assert_called_once()
+    mock_alert.assert_called_once_with(report_text)
+
+
+def test_weekly_report_job_does_not_send_when_no_data():
+    mock_session = MagicMock()
+
+    with patch("scheduler.SessionLocal") as MockSession, \
+         patch("scheduler.generate_weekly_report", return_value=None), \
+         patch("scheduler.send_alert") as mock_alert:
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        sched_mod.weekly_report_job()
+
+    mock_alert.assert_not_called()
+
+
+def test_weekly_report_job_sends_alert_on_failure():
+    with patch("scheduler.SessionLocal", side_effect=Exception("DB error")), \
+         patch("scheduler.send_alert") as mock_alert:
+        sched_mod.weekly_report_job()
+
+    mock_alert.assert_called_once()
+    assert "周报生成失败" in mock_alert.call_args[0][0]
+
+
+def test_weekly_report_job_week_end_is_yesterday():
+    """week_end passed to generate_weekly_report must be today - 1 day."""
+    import datetime as dt_mod
+    mock_session = MagicMock()
+    captured = []
+
+    def fake_generate(session, week_end):
+        captured.append(week_end)
+        return None
+
+    with patch("scheduler.SessionLocal") as MockSession, \
+         patch("scheduler.generate_weekly_report", side_effect=fake_generate), \
+         patch("scheduler.send_alert"):
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        sched_mod.weekly_report_job()
+
+    assert captured[0] == dt_mod.date.today() - dt_mod.timedelta(days=1)
+
+
+def test_create_scheduler_includes_weekly_job():
+    from apscheduler.schedulers.background import BackgroundScheduler
+    scheduler = sched_mod.create_scheduler()
+    job_fns = [job.func for job in scheduler.get_jobs()]
+    assert sched_mod.weekly_report_job in job_fns

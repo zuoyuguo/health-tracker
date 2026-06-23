@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from bot.vision import analyze_food_photo, apply_correction
 from db.base import SessionLocal
 from db.models import Meal
+from analysis.weekly import generate_weekly_report
 
 PENDING_MEAL_KEY = "pending_meal"
 
@@ -150,7 +151,13 @@ async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("功能开发中，周报将在 Phase 7 上线")
+    week_end = datetime.date.today() - datetime.timedelta(days=1)
+    with SessionLocal() as session:
+        report = generate_weekly_report(session, week_end)
+    if report:
+        await update.message.reply_text(report)
+    else:
+        await update.message.reply_text("📭 近7天暂无饮食或运动记录，无法生成周报")
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

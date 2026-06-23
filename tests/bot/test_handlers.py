@@ -308,13 +308,18 @@ def test_cmd_status_replies():
     update.message.reply_text.assert_called_once()
 
 
-def test_cmd_week_replies_with_coming_soon():
+def test_cmd_week_replies_when_no_data():
     from bot.handlers import cmd_week
     update = _make_update()
     context = _make_context()
-    asyncio.run(cmd_week(update, context))
+    with patch("bot.handlers.generate_weekly_report", return_value=None), \
+         patch("bot.handlers.SessionLocal") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        asyncio.run(cmd_week(update, context))
     call_text = update.message.reply_text.call_args[0][0]
-    assert "功能开发中" in call_text
+    assert "暂无" in call_text or "无" in call_text
 
 
 def test_handle_photo_sets_pending_and_replies():
@@ -365,3 +370,40 @@ def test_handle_text_confirm_with_no_pending_replies():
     update.message.reply_text.assert_called_once()
     call_text = update.message.reply_text.call_args[0][0]
     assert "没有" in call_text or "重新" in call_text
+
+
+# --- cmd_week tests ---
+
+
+def test_cmd_week_sends_report_when_data_available(session):
+    from bot.handlers import cmd_week
+    report_text = "📊 本周周报：运动两次，睡眠质量提升。"
+
+    update = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    with patch("bot.handlers.generate_weekly_report", return_value=report_text), \
+         patch("bot.handlers.SessionLocal") as MockSession:
+        MockSession.return_value.__enter__ = MagicMock(return_value=session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        asyncio.run(cmd_week(update, context))
+
+    update.message.reply_text.assert_called_once_with(report_text)
+
+
+def test_cmd_week_sends_no_data_message_when_report_is_none(session):
+    from bot.handlers import cmd_week
+
+    update = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    with patch("bot.handlers.generate_weekly_report", return_value=None), \
+         patch("bot.handlers.SessionLocal") as MockSession:
+        MockSession.return_value.__enter__ = MagicMock(return_value=session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        asyncio.run(cmd_week(update, context))
+
+    reply = update.message.reply_text.call_args[0][0]
+    assert "无" in reply or "暂无" in reply

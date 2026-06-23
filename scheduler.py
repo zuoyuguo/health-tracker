@@ -10,6 +10,7 @@ from renpho_sync.client import RenphoClientWrapper
 from renpho_sync.sync import fetch_recent_measurements, parse_measurement
 from renpho_sync.db_sync import insert_body_metrics
 from analysis.daily import generate_daily_report
+from analysis.weekly import generate_weekly_report
 from notifications.telegram import send_alert
 
 logger = logging.getLogger(__name__)
@@ -80,10 +81,24 @@ def daily_report_job() -> None:
         send_alert(f"⚠️ 日报生成失败：{exc}")
 
 
+def weekly_report_job() -> None:
+    try:
+        week_end = datetime.date.today() - datetime.timedelta(days=1)
+        with SessionLocal() as session:
+            report = generate_weekly_report(session, week_end)
+        if report:
+            send_alert(report)
+        logger.info("Weekly report job complete. Report sent: %s", bool(report))
+    except Exception as exc:
+        logger.error("Weekly report job failed: %s", exc)
+        send_alert(f"⚠️ 周报生成失败：{exc}")
+
+
 def create_scheduler() -> BackgroundScheduler:
     tz = pytz.timezone("Asia/Shanghai")
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
     scheduler.add_job(renpho_sync_job, "cron", hour=9, minute=0, max_instances=1)
     scheduler.add_job(daily_report_job, "cron", hour=22, minute=0, max_instances=1)
+    scheduler.add_job(weekly_report_job, "cron", day_of_week="mon", hour=8, minute=0, max_instances=1)
     return scheduler
