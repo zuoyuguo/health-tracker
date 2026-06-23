@@ -229,9 +229,9 @@ def test_handle_text_confirm_saves_meal(session):
     update.message.reply_text.assert_called_with("✅ 已保存")
 
 
-def test_handle_text_no_pending_does_nothing():
+def test_handle_text_no_pending_non_confirm_does_nothing():
     from bot.handlers import handle_text
-    update = _make_update(text="确认")
+    update = _make_update(text="你好")
     context = _make_context()
     asyncio.run(handle_text(update, context))
     update.message.reply_text.assert_not_called()
@@ -315,3 +315,53 @@ def test_cmd_week_replies_with_coming_soon():
     asyncio.run(cmd_week(update, context))
     call_text = update.message.reply_text.call_args[0][0]
     assert "功能开发中" in call_text
+
+
+def test_handle_photo_sets_pending_and_replies():
+    from bot.handlers import handle_photo, PENDING_MEAL_KEY
+    fake_data = {
+        "foods": [{"name": "苹果", "weight_g": 150, "calories": 80,
+                   "protein_g": 0, "carbs_g": 20, "fat_g": 0}],
+        "total_calories": 80,
+        "total_protein_g": 0,
+        "total_carbs_g": 20,
+        "total_fat_g": 0,
+    }
+    update = _make_update(has_photo=True)
+    context = _make_context()
+    mock_file = MagicMock()
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake-image"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    with patch("bot.handlers.analyze_food_photo", return_value=fake_data):
+        asyncio.run(handle_photo(update, context))
+
+    assert PENDING_MEAL_KEY in context.user_data
+    assert context.user_data[PENDING_MEAL_KEY]["data"] == fake_data
+    assert update.message.reply_text.call_count == 2  # "识别中..." + summary
+
+
+def test_handle_photo_api_failure_sends_error_message():
+    from bot.handlers import handle_photo, PENDING_MEAL_KEY
+    update = _make_update(has_photo=True)
+    context = _make_context()
+    mock_file = MagicMock()
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake-image"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    with patch("bot.handlers.analyze_food_photo", side_effect=Exception("API error")):
+        asyncio.run(handle_photo(update, context))
+
+    assert PENDING_MEAL_KEY not in context.user_data
+    last_reply = update.message.reply_text.call_args_list[-1][0][0]
+    assert "失败" in last_reply
+
+
+def test_handle_text_confirm_with_no_pending_replies():
+    from bot.handlers import handle_text
+    update = _make_update(text="确认")
+    context = _make_context()
+    asyncio.run(handle_text(update, context))
+    update.message.reply_text.assert_called_once()
+    call_text = update.message.reply_text.call_args[0][0]
+    assert "没有" in call_text or "重新" in call_text

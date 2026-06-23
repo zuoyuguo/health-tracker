@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 def test_create_app_registers_handlers(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token-12345")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
     import importlib, config
     importlib.reload(config)
 

@@ -11,6 +11,10 @@ from bot.handlers import (
 
 
 def create_app() -> Application:
+    if not config.TELEGRAM_BOT_TOKEN:
+        raise ValueError("TELEGRAM_BOT_TOKEN is not set")
+    if not config.ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY is not set")
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

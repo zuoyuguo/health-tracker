@@ -54,12 +54,44 @@ def save_meal(session, data: dict, recorded_at: datetime.datetime, confirmed: bo
     return meal
 
 
+def get_today_summary(session, date: datetime.date) -> str:
+    meals = (
+        session.query(Meal)
+        .filter(
+            func.date(Meal.recorded_at) == date,
+            Meal.confirmed.is_(True),
+        )
+        .order_by(Meal.recorded_at)
+        .all()
+    )
+    if not meals:
+        return f"📅 {date} 暂无饮食记录"
+
+    total_cal = sum(float(m.total_calories or 0) for m in meals)
+    lines = [f"📅 {date} 饮食汇总", ""]
+    for meal in meals:
+        time_str = meal.recorded_at.strftime("%H:%M")
+        cal_str = f"{float(meal.total_calories):.0f} kcal" if meal.total_calories else "—"
+        if meal.user_note and not meal.foods:
+            lines.append(f"• {time_str} [{meal.meal_type}] {meal.user_note}")
+        else:
+            food_names = "、".join(f["name"] for f in (meal.foods or []))
+            lines.append(f"• {time_str} [{meal.meal_type}] {food_names} {cal_str}")
+    lines.append("")
+    lines.append(f"合计摄入：{total_cal:.0f} kcal")
+    return "\n".join(lines)
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("识别中...")
     photo = update.message.photo[-1]
     tg_file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await tg_file.download_as_bytearray())
-    data = analyze_food_photo(image_bytes)
+    try:
+        data = analyze_food_photo(image_bytes)
+    except Exception:
+        await update.message.reply_text("识别失败，请稍后重试 🙏")
+        return
     context.user_data[PENDING_MEAL_KEY] = {
         "data": data,
         "recorded_at": update.message.date,
@@ -71,6 +103,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     text = (update.message.text or "").strip()
     pending = context.user_data.get(PENDING_MEAL_KEY)
     if not pending:
+        if text == "确认":
+            await update.message.reply_text("没有待确认的记录，请重新发送食物照片")
         return
     if text == "确认":
         with SessionLocal() as session:
@@ -80,7 +114,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("✅ 已保存")
     else:
         await update.message.reply_text("正在修正...")
-        new_data = apply_correction(pending["data"], text)
+        try:
+            new_data = apply_correction(pending["data"], text)
+        except Exception:
+            await update.message.reply_text("修正失败，请重试 🙏")
+            return
         context.user_data[PENDING_MEAL_KEY]["data"] = new_data
         await update.message.reply_text(format_meal_summary(new_data))
 
@@ -117,31 +155,3 @@ async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✅ 系统运行中")
-
-
-def get_today_summary(session, date: datetime.date) -> str:
-    meals = (
-        session.query(Meal)
-        .filter(
-            func.date(Meal.recorded_at) == date,
-            Meal.confirmed.is_(True),
-        )
-        .order_by(Meal.recorded_at)
-        .all()
-    )
-    if not meals:
-        return f"📅 {date} 暂无饮食记录"
-
-    total_cal = sum(float(m.total_calories or 0) for m in meals)
-    lines = [f"📅 {date} 饮食汇总", ""]
-    for meal in meals:
-        time_str = meal.recorded_at.strftime("%H:%M")
-        cal_str = f"{float(meal.total_calories):.0f} kcal" if meal.total_calories else "—"
-        if meal.user_note and not meal.foods:
-            lines.append(f"• {time_str} [{meal.meal_type}] {meal.user_note}")
-        else:
-            food_names = "、".join(f["name"] for f in (meal.foods or []))
-            lines.append(f"• {time_str} [{meal.meal_type}] {food_names} {cal_str}")
-    lines.append("")
-    lines.append(f"合计摄入：{total_cal:.0f} kcal")
-    return "\n".join(lines)
