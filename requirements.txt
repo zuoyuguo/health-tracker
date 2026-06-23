@@ -9,3 +9,4 @@ python-telegram-bot[http2]>=20.7
 anthropic>=0.40.0
 APScheduler>=3.10,<4.0
 pytz>=2024.1
+renpho-api==0.1.0
