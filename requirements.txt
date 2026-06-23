@@ -7,3 +7,5 @@ alembic==1.18.4
 psycopg2-binary==2.9.12
 python-telegram-bot[http2]>=20.7
 anthropic>=0.40.0
+APScheduler>=3.10,<4.0
+pytz>=2024.1
