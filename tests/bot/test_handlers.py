@@ -173,3 +173,145 @@ def test_get_today_summary_excludes_unconfirmed(session):
     session.flush()
     summary = get_today_summary(session, test_date)
     assert "暂无" in summary
+
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _make_update(text=None, has_photo=False, args=None):
+    update = MagicMock()
+    update.message.reply_text = AsyncMock()
+    update.message.text = text
+    update.message.date = datetime.datetime(2026, 6, 22, 12, 0, tzinfo=datetime.timezone.utc)
+    if has_photo:
+        photo_mock = MagicMock()
+        photo_mock.file_id = "test-file-id"
+        update.message.photo = [photo_mock]
+    else:
+        update.message.photo = []
+    return update
+
+
+def _make_context(user_data=None):
+    context = MagicMock()
+    context.user_data = user_data if user_data is not None else {}
+    context.bot.get_file = AsyncMock()
+    context.args = []
+    return context
+
+
+def test_handle_text_confirm_saves_meal(session):
+    from bot.handlers import handle_text, PENDING_MEAL_KEY
+    pending = {
+        "data": {
+            "foods": [{"name": "苹果", "weight_g": 150, "calories": 80,
+                       "protein_g": 0, "carbs_g": 20, "fat_g": 0}],
+            "total_calories": 80,
+            "total_protein_g": 0,
+            "total_carbs_g": 20,
+            "total_fat_g": 0,
+        },
+        "recorded_at": datetime.datetime(2026, 6, 22, 12, 0, tzinfo=datetime.timezone.utc),
+    }
+    update = _make_update(text="确认")
+    context = _make_context(user_data={PENDING_MEAL_KEY: pending})
+
+    with patch("bot.handlers.SessionLocal") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        asyncio.run(handle_text(update, context))
+
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+    assert PENDING_MEAL_KEY not in context.user_data
+    update.message.reply_text.assert_called_with("✅ 已保存")
+
+
+def test_handle_text_no_pending_does_nothing():
+    from bot.handlers import handle_text
+    update = _make_update(text="确认")
+    context = _make_context()
+    asyncio.run(handle_text(update, context))
+    update.message.reply_text.assert_not_called()
+
+
+def test_handle_text_correction_updates_pending():
+    from bot.handlers import handle_text, PENDING_MEAL_KEY
+    original_data = {
+        "foods": [{"name": "牛排", "weight_g": 200, "calories": 480,
+                   "protein_g": 42, "carbs_g": 0, "fat_g": 32}],
+        "total_calories": 480,
+        "total_protein_g": 42,
+        "total_carbs_g": 0,
+        "total_fat_g": 32,
+    }
+    pending = {
+        "data": original_data,
+        "recorded_at": datetime.datetime(2026, 6, 22, 19, 0, tzinfo=datetime.timezone.utc),
+    }
+    new_data = {
+        "foods": [{"name": "牛排", "weight_g": 300, "calories": 720,
+                   "protein_g": 63, "carbs_g": 0, "fat_g": 48}],
+        "total_calories": 720,
+        "total_protein_g": 63,
+        "total_carbs_g": 0,
+        "total_fat_g": 48,
+    }
+    update = _make_update(text="牛排是 300g")
+    context = _make_context(user_data={PENDING_MEAL_KEY: pending})
+
+    with patch("bot.handlers.apply_correction", return_value=new_data) as mock_corr:
+        asyncio.run(handle_text(update, context))
+        mock_corr.assert_called_once_with(original_data, "牛排是 300g")
+
+    assert context.user_data[PENDING_MEAL_KEY]["data"] == new_data
+    assert update.message.reply_text.call_count == 2  # "正在修正..." + new summary
+
+
+def test_cmd_note_saves_with_note_text(session):
+    from bot.handlers import cmd_note
+    update = _make_update(text="/note 喝了一杯咖啡")
+    context = _make_context()
+    context.args = ["喝了一杯咖啡"]
+
+    with patch("bot.handlers.SessionLocal") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        asyncio.run(cmd_note(update, context))
+
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+    added = mock_session.add.call_args[0][0]
+    assert added.user_note == "喝了一杯咖啡"
+    assert added.confirmed is True
+
+
+def test_cmd_note_no_args_replies_with_usage():
+    from bot.handlers import cmd_note
+    update = _make_update()
+    context = _make_context()
+    context.args = []
+    asyncio.run(cmd_note(update, context))
+    update.message.reply_text.assert_called_once()
+    call_text = update.message.reply_text.call_args[0][0]
+    assert "用法" in call_text
+
+
+def test_cmd_status_replies():
+    from bot.handlers import cmd_status
+    update = _make_update()
+    context = _make_context()
+    asyncio.run(cmd_status(update, context))
+    update.message.reply_text.assert_called_once()
+
+
+def test_cmd_week_replies_with_coming_soon():
+    from bot.handlers import cmd_week
+    update = _make_update()
+    context = _make_context()
+    asyncio.run(cmd_week(update, context))
+    call_text = update.message.reply_text.call_args[0][0]
+    assert "功能开发中" in call_text

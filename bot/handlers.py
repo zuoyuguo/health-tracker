@@ -45,6 +45,79 @@ def save_meal(session, data: dict, recorded_at: datetime.datetime, confirmed: bo
     return meal
 
 
+from telegram import Update
+from telegram.ext import ContextTypes
+from bot.vision import analyze_food_photo, apply_correction
+from db.base import SessionLocal
+
+PENDING_MEAL_KEY = "pending_meal"
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("识别中...")
+    photo = update.message.photo[-1]
+    tg_file = await context.bot.get_file(photo.file_id)
+    image_bytes = bytes(await tg_file.download_as_bytearray())
+    data = analyze_food_photo(image_bytes)
+    context.user_data[PENDING_MEAL_KEY] = {
+        "data": data,
+        "recorded_at": update.message.date,
+    }
+    await update.message.reply_text(format_meal_summary(data))
+
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (update.message.text or "").strip()
+    pending = context.user_data.get(PENDING_MEAL_KEY)
+    if not pending:
+        return
+    if text == "确认":
+        with SessionLocal() as session:
+            save_meal(session, pending["data"], pending["recorded_at"], confirmed=True)
+            session.commit()
+        del context.user_data[PENDING_MEAL_KEY]
+        await update.message.reply_text("✅ 已保存")
+    else:
+        await update.message.reply_text("正在修正...")
+        new_data = apply_correction(pending["data"], text)
+        context.user_data[PENDING_MEAL_KEY]["data"] = new_data
+        await update.message.reply_text(format_meal_summary(new_data))
+
+
+async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    today = datetime.date.today()
+    with SessionLocal() as session:
+        reply = get_today_summary(session, today)
+    await update.message.reply_text(reply)
+
+
+async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    note = " ".join(context.args) if context.args else ""
+    if not note:
+        await update.message.reply_text("用法：/note <备注内容>，例如：/note 喝了一杯咖啡")
+        return
+    recorded_at = update.message.date
+    with SessionLocal() as session:
+        meal = Meal(
+            recorded_at=recorded_at,
+            meal_type=infer_meal_type(recorded_at),
+            foods=[],
+            user_note=note,
+            confirmed=True,
+        )
+        session.add(meal)
+        session.commit()
+    await update.message.reply_text(f"✅ 备注已保存：{note}")
+
+
+async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("功能开发中，周报将在 Phase 7 上线")
+
+
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("✅ 系统运行中")
+
+
 def get_today_summary(session, date: datetime.date) -> str:
     from sqlalchemy import func
     meals = (
