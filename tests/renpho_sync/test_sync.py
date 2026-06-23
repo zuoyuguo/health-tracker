@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 
 def test_fetch_recent_measurements_filters_by_days():
-    from renpho.sync import fetch_recent_measurements
+    from renpho_sync.sync import fetch_recent_measurements
 
     now = datetime.datetime.now(datetime.timezone.utc)
     ts_yesterday = int((now - datetime.timedelta(days=1)).timestamp())
@@ -22,7 +22,7 @@ def test_fetch_recent_measurements_filters_by_days():
 
 
 def test_fetch_recent_measurements_returns_empty_if_none_recent():
-    from renpho.sync import fetch_recent_measurements
+    from renpho_sync.sync import fetch_recent_measurements
 
     now = datetime.datetime.now(datetime.timezone.utc)
     ts_old = int((now - datetime.timedelta(days=30)).timestamp())
@@ -37,7 +37,7 @@ def test_fetch_recent_measurements_returns_empty_if_none_recent():
 
 
 def test_parse_measurement_basic_fields():
-    from renpho.sync import parse_measurement
+    from renpho_sync.sync import parse_measurement
 
     now_ts = 1700000000  # seconds
     raw = {
@@ -66,7 +66,7 @@ def test_parse_measurement_basic_fields():
 
 
 def test_parse_measurement_millisecond_timestamp():
-    from renpho.sync import parse_measurement
+    from renpho_sync.sync import parse_measurement
 
     ts_ms = 1700000000 * 1000
     raw = {"timeStamp": ts_ms, "weight": 69.0}
@@ -77,7 +77,7 @@ def test_parse_measurement_millisecond_timestamp():
 
 
 def test_parse_measurement_record_id_falls_back_to_timestamp():
-    from renpho.sync import parse_measurement
+    from renpho_sync.sync import parse_measurement
 
     raw = {"timeStamp": 1700000000, "weight": 70.0}
     result = parse_measurement(raw)
@@ -85,7 +85,7 @@ def test_parse_measurement_record_id_falls_back_to_timestamp():
 
 
 def test_parse_measurement_nullable_fields_absent():
-    from renpho.sync import parse_measurement
+    from renpho_sync.sync import parse_measurement
 
     raw = {"timeStamp": 1700000000, "weight": 70.0, "id": "x"}
     result = parse_measurement(raw)
@@ -99,9 +99,16 @@ def test_parse_measurement_nullable_fields_absent():
 
 
 def test_parse_measurement_bmr_is_int():
-    from renpho.sync import parse_measurement
+    from renpho_sync.sync import parse_measurement
 
     raw = {"timeStamp": 1700000000, "id": "x", "bmr": 1700.9}
     result = parse_measurement(raw)
     assert result["bmr_kcal"] == 1700
     assert isinstance(result["bmr_kcal"], int)
+
+
+def test_parse_measurement_lean_mass_uses_sinew_when_zero():
+    from renpho_sync.sync import parse_measurement
+    raw = {"timeStamp": 1700000000, "id": "x", "sinew": 0.0, "lbm": 57.0}
+    result = parse_measurement(raw)
+    assert result["lean_mass_kg"] == 0.0  # must NOT fall through to lbm

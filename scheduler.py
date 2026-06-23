@@ -5,9 +5,9 @@ from db.base import SessionLocal
 from garmin.client import GarminClient
 from garmin.sync import fetch_yesterday_sleep, fetch_yesterday_activities, parse_sleep, parse_activity
 from garmin.db_sync import upsert_sleep, insert_activities
-from renpho.client import RenphoClientWrapper
-from renpho.sync import fetch_recent_measurements, parse_measurement
-from renpho.db_sync import insert_body_metrics
+from renpho_sync.client import RenphoClientWrapper
+from renpho_sync.sync import fetch_recent_measurements, parse_measurement
+from renpho_sync.db_sync import insert_body_metrics
 from notifications.telegram import send_alert
 
 logger = logging.getLogger(__name__)

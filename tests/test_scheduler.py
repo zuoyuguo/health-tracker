@@ -120,6 +120,7 @@ def test_renpho_sync_job_resets_counter_on_success():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
         sched_mod.renpho_sync_job()
 
+    mock_wrapper.connect.assert_called_once()
     assert sched_mod._renpho_consecutive_failures == 0
 
 

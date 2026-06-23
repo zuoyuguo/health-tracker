@@ -29,6 +29,8 @@ def parse_measurement(raw: dict) -> dict:
     bmr_raw = raw.get("bmr")
     bmr_kcal = int(bmr_raw) if bmr_raw is not None else None
 
+    _sinew = raw.get("sinew")
+
     return {
         "renpho_record_id": renpho_record_id,
         "measured_at": measured_at,
@@ -36,7 +38,7 @@ def parse_measurement(raw: dict) -> dict:
         "bmi": raw.get("bmi"),
         "body_fat_pct": raw.get("bodyfat"),
         "fat_mass_kg": raw.get("bodyfat_mass"),
-        "lean_mass_kg": raw.get("sinew") or raw.get("lbm"),
+        "lean_mass_kg": _sinew if _sinew is not None else raw.get("lbm"),
         "muscle_mass_kg": raw.get("muscle_mass"),
         "bone_mass_kg": raw.get("bone_mass"),
         "water_pct": raw.get("water"),

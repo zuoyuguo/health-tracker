@@ -34,7 +34,7 @@ def _parsed(record_id="rec1", ts=None):
 
 
 def test_insert_body_metrics_inserts_new_record(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     count = insert_body_metrics(session, [_parsed("r1")])
     session.commit()
@@ -55,7 +55,7 @@ def test_insert_body_metrics_inserts_new_record(session):
 
 
 def test_insert_body_metrics_skips_existing_record(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     insert_body_metrics(session, [_parsed("r1")])
     session.commit()
@@ -68,7 +68,7 @@ def test_insert_body_metrics_skips_existing_record(session):
 
 
 def test_insert_body_metrics_inserts_multiple_new(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     records = [_parsed("r1"), _parsed("r2"), _parsed("r3")]
     count = insert_body_metrics(session, records)
@@ -79,7 +79,7 @@ def test_insert_body_metrics_inserts_multiple_new(session):
 
 
 def test_insert_body_metrics_partial_new_and_existing(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     insert_body_metrics(session, [_parsed("r1")])
     session.commit()
@@ -92,14 +92,14 @@ def test_insert_body_metrics_partial_new_and_existing(session):
 
 
 def test_insert_body_metrics_returns_zero_for_empty_list(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     count = insert_body_metrics(session, [])
     assert count == 0
 
 
 def test_insert_body_metrics_skips_when_record_id_is_empty(session):
-    from renpho.db_sync import insert_body_metrics
+    from renpho_sync.db_sync import insert_body_metrics
 
     parsed = _parsed("")
     count = insert_body_metrics(session, [parsed])
