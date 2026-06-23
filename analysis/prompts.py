@@ -109,3 +109,79 @@ def build_daily_prompt(
     )
 
     return "\n".join(lines)
+
+
+_WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+
+def _weekday_cn(date: datetime.date) -> str:
+    return _WEEKDAY_CN[date.weekday()]
+
+
+def build_weekly_prompt(daily_data: list[dict]) -> str:
+    lines = ["你是一位健康分析师。请根据以下过去7天健康数据生成周报。\n"]
+
+    for entry in daily_data:
+        date = entry["date"]
+        meals = entry["meals"]
+        sleep = entry["sleep"]
+        activities = entry["activities"]
+        body_metrics = entry["body_metrics"]
+
+        lines.append(f"【{date.strftime('%m/%d')}（{_weekday_cn(date)}）】")
+
+        if meals:
+            total_cal = sum(m.get("total_calories") or 0 for m in meals)
+            lines.append(f"  饮食：{total_cal:.0f} kcal")
+        else:
+            lines.append("  饮食：无记录")
+
+        if sleep:
+            total_min = sleep.get("total_sleep_min") or 0
+            deep_min = sleep.get("deep_sleep_min") or 0
+            deep_pct = f"{deep_min / total_min * 100:.0f}%" if total_min > 0 else "—"
+            total_h, total_m = divmod(total_min, 60)
+            sleep_str = f"{total_h}h{total_m:02d}m，深睡{deep_pct}"
+            if sleep.get("sleep_score") is not None:
+                sleep_str += f"，评分{sleep['sleep_score']}"
+            if sleep.get("resting_hr") is not None:
+                sleep_str += f"，静息心率{sleep['resting_hr']}bpm"
+            lines.append(f"  睡眠：{sleep_str}")
+        else:
+            lines.append("  睡眠：无数据")
+
+        if activities:
+            act_parts = []
+            for a in activities:
+                act_parts.append(
+                    f"{a.get('activity_type', '运动')}"
+                    f"({a.get('duration_min', 0)}min,"
+                    f"{a.get('calories_burned', 0):.0f}kcal)"
+                )
+            lines.append(f"  运动：{'；'.join(act_parts)}")
+        else:
+            lines.append("  运动：无")
+
+        if body_metrics:
+            for bm in body_metrics:
+                parts = []
+                if bm.get("weight_kg") is not None:
+                    parts.append(f"体重{bm['weight_kg']:.1f}kg")
+                if bm.get("body_fat_pct") is not None:
+                    parts.append(f"体脂{bm['body_fat_pct']:.1f}%")
+                lines.append(f"  称重：{'、'.join(parts) if parts else '—'}")
+
+        lines.append("")
+
+    lines.append(
+        "请用中文生成500-800字的周报，格式：纯文本+少量emoji，分析以下维度：\n"
+        "1. 热量摄入趋势（每日数据+趋势描述）\n"
+        "2. 睡眠质量趋势（平均时长、深睡比例变化）\n"
+        "3. 静息心率趋势（是否随运动频率改善）\n"
+        "4. 运动频率和总量统计\n"
+        "5. 体重/体脂变化趋势（若本周有称重记录）\n"
+        "6. 关联发现（如运动日的次日深睡比例更高；热量缺口与体重变化是否一致）\n"
+        "7. 本周亮点+下周建议"
+    )
+
+    return "\n".join(lines)
