@@ -1,4 +1,5 @@
 import datetime
+import pytz
 import anthropic
 import config
 from analysis.prompts import build_weekly_prompt
@@ -9,10 +10,11 @@ from db.models import Meal, Sleep, Activity, BodyMetric
 def collect_weekly_data(session, week_end: datetime.date) -> list[dict]:
     week_start = week_end - datetime.timedelta(days=6)
     result = []
+    local_tz = pytz.timezone(config.TIMEZONE)
     for i in range(7):
         date = week_start + datetime.timedelta(days=i)
-        start_dt = datetime.datetime.combine(date, datetime.time.min, tzinfo=datetime.timezone.utc)
-        end_dt = datetime.datetime.combine(date, datetime.time.max, tzinfo=datetime.timezone.utc)
+        start_dt = local_tz.localize(datetime.datetime.combine(date, datetime.time.min))
+        end_dt = local_tz.localize(datetime.datetime.combine(date, datetime.time.max))
         yesterday = date - datetime.timedelta(days=1)
 
         meal_rows = (

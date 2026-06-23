@@ -1,4 +1,5 @@
 import datetime
+import pytz
 import anthropic
 import config
 from analysis.prompts import build_daily_prompt
@@ -6,8 +7,9 @@ from db.models import Meal, Sleep, Activity, BodyMetric
 
 
 def collect_daily_data(session, date: datetime.date) -> dict:
-    start = datetime.datetime.combine(date, datetime.time.min, tzinfo=datetime.timezone.utc)
-    end = datetime.datetime.combine(date, datetime.time.max, tzinfo=datetime.timezone.utc)
+    local_tz = pytz.timezone(config.TIMEZONE)
+    start = local_tz.localize(datetime.datetime.combine(date, datetime.time.min))
+    end = local_tz.localize(datetime.datetime.combine(date, datetime.time.max))
     yesterday = date - datetime.timedelta(days=1)
 
     meal_rows = session.query(Meal).filter(

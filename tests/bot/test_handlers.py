@@ -24,31 +24,36 @@ def session(engine):
 
 def test_infer_meal_type_breakfast():
     from bot.handlers import infer_meal_type
-    dt = datetime.datetime(2026, 6, 22, 8, 30, tzinfo=datetime.timezone.utc)
+    # 14:00 UTC = 07:00 PDT → 早餐
+    dt = datetime.datetime(2026, 6, 22, 14, 0, tzinfo=datetime.timezone.utc)
     assert infer_meal_type(dt) == "早餐"
 
 
 def test_infer_meal_type_lunch():
     from bot.handlers import infer_meal_type
-    dt = datetime.datetime(2026, 6, 22, 12, 0, tzinfo=datetime.timezone.utc)
+    # 19:00 UTC = 12:00 PDT → 午餐
+    dt = datetime.datetime(2026, 6, 22, 19, 0, tzinfo=datetime.timezone.utc)
     assert infer_meal_type(dt) == "午餐"
 
 
 def test_infer_meal_type_dinner():
     from bot.handlers import infer_meal_type
-    dt = datetime.datetime(2026, 6, 22, 19, 0, tzinfo=datetime.timezone.utc)
+    # 02:00 UTC June 23 = 19:00 PDT June 22 → 晚餐
+    dt = datetime.datetime(2026, 6, 23, 2, 0, tzinfo=datetime.timezone.utc)
     assert infer_meal_type(dt) == "晚餐"
 
 
 def test_infer_meal_type_late_night_snack():
     from bot.handlers import infer_meal_type
+    # 23:00 UTC = 16:00 PDT → 加餐（14:00–17:00 之间）
     dt = datetime.datetime(2026, 6, 22, 23, 0, tzinfo=datetime.timezone.utc)
     assert infer_meal_type(dt) == "加餐"
 
 
 def test_infer_meal_type_early_morning_snack():
     from bot.handlers import infer_meal_type
-    dt = datetime.datetime(2026, 6, 22, 3, 0, tzinfo=datetime.timezone.utc)
+    # 10:00 UTC = 03:00 PDT → 加餐（凌晨）
+    dt = datetime.datetime(2026, 6, 22, 10, 0, tzinfo=datetime.timezone.utc)
     assert infer_meal_type(dt) == "加餐"
 
 
@@ -97,7 +102,8 @@ def test_save_meal_sets_confirmed_and_meal_type(session):
         "total_carbs_g": 44,
         "total_fat_g": 1,
     }
-    recorded_at = datetime.datetime(2026, 6, 22, 12, 0, tzinfo=datetime.timezone.utc)
+    # 19:00 UTC = 12:00 PDT → 午餐
+    recorded_at = datetime.datetime(2026, 6, 22, 19, 0, tzinfo=datetime.timezone.utc)
     meal = save_meal(session, data, recorded_at, confirmed=True)
     session.flush()
 
@@ -304,8 +310,14 @@ def test_cmd_status_replies():
     from bot.handlers import cmd_status
     update = _make_update()
     context = _make_context()
-    asyncio.run(cmd_status(update, context))
+    with patch("bot.handlers.SessionLocal") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.query.return_value.order_by.return_value.first.return_value = None
+        asyncio.run(cmd_status(update, context))
     update.message.reply_text.assert_called_once()
+    assert "状态" in update.message.reply_text.call_args[0][0]
 
 
 def test_cmd_week_replies_when_no_data():

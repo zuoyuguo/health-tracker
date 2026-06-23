@@ -1,19 +1,22 @@
 import datetime
+import pytz
 from sqlalchemy import func
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
+import config
 from bot.vision import analyze_food_photo, apply_correction
 from db.base import SessionLocal
-from db.models import Meal
+from db.models import Meal, Sleep, Activity, BodyMetric
 from analysis.weekly import generate_weekly_report
 
 PENDING_MEAL_KEY = "pending_meal"
 
 
 def infer_meal_type(dt: datetime.datetime) -> str:
-    hour = dt.hour
+    local_tz = pytz.timezone(config.TIMEZONE)
+    hour = dt.astimezone(local_tz).hour
     if 5 <= hour < 10:
         return "早餐"
     elif 10 <= hour < 14:
@@ -56,10 +59,14 @@ def save_meal(session, data: dict, recorded_at: datetime.datetime, confirmed: bo
 
 
 def get_today_summary(session, date: datetime.date) -> str:
+    local_tz = pytz.timezone(config.TIMEZONE)
+    start = local_tz.localize(datetime.datetime.combine(date, datetime.time.min))
+    end = local_tz.localize(datetime.datetime.combine(date, datetime.time.max))
     meals = (
         session.query(Meal)
         .filter(
-            func.date(Meal.recorded_at) == date,
+            Meal.recorded_at >= start,
+            Meal.recorded_at <= end,
             Meal.confirmed.is_(True),
         )
         .order_by(Meal.recorded_at)
@@ -125,7 +132,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    today = datetime.date.today()
+    local_tz = pytz.timezone(config.TIMEZONE)
+    today = datetime.datetime.now(local_tz).date()
     with SessionLocal() as session:
         reply = get_today_summary(session, today)
     await update.message.reply_text(reply)
@@ -151,7 +159,8 @@ async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    week_end = datetime.date.today() - datetime.timedelta(days=1)
+    local_tz = pytz.timezone(config.TIMEZONE)
+    week_end = datetime.datetime.now(local_tz).date() - datetime.timedelta(days=1)
     with SessionLocal() as session:
         report = generate_weekly_report(session, week_end)
     if report:
@@ -161,4 +170,22 @@ async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("✅ 系统运行中")
+    with SessionLocal() as session:
+        last_sleep = session.query(Sleep).order_by(Sleep.created_at.desc()).first()
+        last_activity = session.query(Activity).order_by(Activity.created_at.desc()).first()
+        last_metric = session.query(BodyMetric).order_by(BodyMetric.created_at.desc()).first()
+
+    local_tz = pytz.timezone(config.TIMEZONE)
+
+    def _fmt(dt):
+        if dt is None:
+            return "从未同步"
+        return dt.astimezone(local_tz).strftime("%Y-%m-%d %H:%M")
+
+    lines = [
+        "📊 系统状态",
+        f"Garmin 睡眠：{_fmt(last_sleep.created_at if last_sleep else None)}",
+        f"Garmin 运动：{_fmt(last_activity.created_at if last_activity else None)}",
+        f"Renpho 体重：{_fmt(last_metric.created_at if last_metric else None)}",
+    ]
+    await update.message.reply_text("\n".join(lines))

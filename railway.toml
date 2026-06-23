@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "alembic upgrade head && python main.py"
+numReplicas = 1

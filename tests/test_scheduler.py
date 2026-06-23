@@ -254,8 +254,10 @@ def test_weekly_report_job_sends_alert_on_failure():
 
 
 def test_weekly_report_job_week_end_is_yesterday():
-    """week_end passed to generate_weekly_report must be today - 1 day."""
+    """week_end passed to generate_weekly_report must be local today - 1 day."""
     import datetime as dt_mod
+    import pytz
+    local_tz = pytz.timezone("America/Los_Angeles")
     mock_session = MagicMock()
     captured = []
 
@@ -270,7 +272,8 @@ def test_weekly_report_job_week_end_is_yesterday():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
         sched_mod.weekly_report_job()
 
-    assert captured[0] == dt_mod.date.today() - dt_mod.timedelta(days=1)
+    expected = dt_mod.datetime.now(local_tz).date() - dt_mod.timedelta(days=1)
+    assert captured[0] == expected
 
 
 def test_create_scheduler_includes_weekly_job():

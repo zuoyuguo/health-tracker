@@ -1,6 +1,7 @@
 import datetime
 import logging
 import pytz
+import config
 from apscheduler.schedulers.background import BackgroundScheduler
 from db.base import SessionLocal
 from garmin.client import GarminClient
@@ -70,7 +71,7 @@ def renpho_sync_job() -> None:
 
 def daily_report_job() -> None:
     try:
-        today = datetime.date.today()
+        today = datetime.datetime.now(pytz.timezone(config.TIMEZONE)).date()
         with SessionLocal() as session:
             report = generate_daily_report(session, today)
         if report:
@@ -83,7 +84,7 @@ def daily_report_job() -> None:
 
 def weekly_report_job() -> None:
     try:
-        week_end = datetime.date.today() - datetime.timedelta(days=1)
+        week_end = datetime.datetime.now(pytz.timezone(config.TIMEZONE)).date() - datetime.timedelta(days=1)
         with SessionLocal() as session:
             report = generate_weekly_report(session, week_end)
         if report:
@@ -95,7 +96,7 @@ def weekly_report_job() -> None:
 
 
 def create_scheduler() -> BackgroundScheduler:
-    tz = pytz.timezone("Asia/Shanghai")
+    tz = pytz.timezone(config.TIMEZONE)
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
     scheduler.add_job(renpho_sync_job, "cron", hour=9, minute=0, max_instances=1)
