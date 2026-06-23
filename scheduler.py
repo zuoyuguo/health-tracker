@@ -42,5 +42,5 @@ def garmin_sync_job() -> None:
 def create_scheduler() -> BackgroundScheduler:
     tz = pytz.timezone("Asia/Shanghai")
     scheduler = BackgroundScheduler(timezone=tz)
-    scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0)
+    scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
     return scheduler
