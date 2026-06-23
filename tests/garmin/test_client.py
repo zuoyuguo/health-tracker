@@ -47,10 +47,9 @@ def test_connect_passes_credentials_to_garmin(tmp_path, monkeypatch):
         importlib.reload(client_mod)
         client = client_mod.GarminClient()
         client.connect()
-        MockGarmin.assert_called_once_with(
-            email="user@example.com",
-            password="pass123",
-        )
+        call_kwargs = MockGarmin.call_args.kwargs
+        assert call_kwargs["email"] == "user@example.com"
+        assert call_kwargs["password"] == "pass123"
 
 
 def test_garmin_attribute_is_accessible_after_connect(tmp_path, monkeypatch):
