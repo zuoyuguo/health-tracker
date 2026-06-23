@@ -1,6 +1,6 @@
 import garminconnect
 import config
-from garmin.session import get_token_path
+from garmin.session import get_token_path, ensure_token_file
 
 
 class GarminClient:
@@ -8,6 +8,7 @@ class GarminClient:
         self.garmin = None
 
     def connect(self) -> None:
+        ensure_token_file()
         self.garmin = garminconnect.Garmin(
             email=config.GARMIN_EMAIL,
             password=config.GARMIN_PASSWORD,
