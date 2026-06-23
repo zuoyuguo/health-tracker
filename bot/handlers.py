@@ -1,5 +1,14 @@
 import datetime
+from sqlalchemy import func
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from bot.vision import analyze_food_photo, apply_correction
+from db.base import SessionLocal
 from db.models import Meal
+
+PENDING_MEAL_KEY = "pending_meal"
 
 
 def infer_meal_type(dt: datetime.datetime) -> str:
@@ -43,14 +52,6 @@ def save_meal(session, data: dict, recorded_at: datetime.datetime, confirmed: bo
     session.add(meal)
     session.flush()
     return meal
-
-
-from telegram import Update
-from telegram.ext import ContextTypes
-from bot.vision import analyze_food_photo, apply_correction
-from db.base import SessionLocal
-
-PENDING_MEAL_KEY = "pending_meal"
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -119,7 +120,6 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 def get_today_summary(session, date: datetime.date) -> str:
-    from sqlalchemy import func
     meals = (
         session.query(Meal)
         .filter(
