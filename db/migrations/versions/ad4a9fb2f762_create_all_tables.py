@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column('carbs_g', sa.Numeric(precision=6, scale=2), nullable=True),
         sa.Column('fat_g', sa.Numeric(precision=6, scale=2), nullable=True),
         sa.Column('user_note', sa.Text(), nullable=True),
-        sa.Column('confirmed', sa.Boolean(), nullable=False),
+        sa.Column('confirmed', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint('id'),
     )
