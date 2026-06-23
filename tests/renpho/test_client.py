@@ -10,7 +10,6 @@ def test_renpho_client_wrapper_connect_calls_login(monkeypatch):
 
     mock_renpho = MagicMock()
     with patch("renpho.client.RenphoClient", return_value=mock_renpho) as MockClass:
-        import importlib
         import renpho.client as rc
         importlib.reload(rc)
         wrapper = rc.RenphoClientWrapper()
@@ -27,7 +26,6 @@ def test_renpho_client_wrapper_raises_on_missing_email(monkeypatch):
     import importlib, config
     importlib.reload(config)
 
-    import importlib
     import renpho.client as rc
     importlib.reload(rc)
     wrapper = rc.RenphoClientWrapper()
@@ -41,7 +39,6 @@ def test_renpho_client_wrapper_raises_on_missing_password(monkeypatch):
     import importlib, config
     importlib.reload(config)
 
-    import importlib
     import renpho.client as rc
     importlib.reload(rc)
     wrapper = rc.RenphoClientWrapper()

@@ -1,5 +1,4 @@
 import config
-import sys
 
 
 class RenphoClientWrapper:
@@ -12,23 +11,16 @@ class RenphoClientWrapper:
         if not config.RENPHO_PASSWORD:
             raise ValueError("RENPHO_PASSWORD is not set")
 
-        # Get RenphoClient from this module's namespace, allowing for mocking
-        # Access through __dict__ to avoid triggering any descriptors and to get the actual patched value
-        module_dict = sys.modules[__name__].__dict__
-        if 'RenphoClient' in module_dict:
-            RenphoClientClass = module_dict['RenphoClient']
-        else:
-            # First time access - import and cache it
-            from renpho import RenphoClient
-            RenphoClientClass = RenphoClient
-            # Don't assign to module - let tests patch the namespace directly
+        import renpho.client as _self_module
+        RenphoClientClass = _self_module.RenphoClient
 
         self.client = RenphoClientClass(config.RENPHO_EMAIL, config.RENPHO_PASSWORD)
         self.client.login()
 
 
-# Make RenphoClient available in module namespace so it can be patched
-# Use a lazy import wrapper that doesn't get re-executed
+# Make RenphoClient available in module namespace so it can be patched.
+# __getattr__ is only called when a normal attribute lookup fails, so patched
+# values injected into __dict__ by unittest.mock take precedence automatically.
 def __getattr__(name):
     if name == 'RenphoClient':
         from renpho import RenphoClient
