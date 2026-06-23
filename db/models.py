@@ -1,7 +1,7 @@
 import datetime
 from sqlalchemy import (
     BigInteger, Boolean, Column, Date, Integer,
-    Numeric, String, Text, UniqueConstraint,
+    Numeric, String, Text,
 )
 from sqlalchemy import DateTime
 from sqlalchemy.types import JSON
