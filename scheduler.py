@@ -1,3 +1,4 @@
+import datetime
 import logging
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -8,6 +9,7 @@ from garmin.db_sync import upsert_sleep, insert_activities
 from renpho_sync.client import RenphoClientWrapper
 from renpho_sync.sync import fetch_recent_measurements, parse_measurement
 from renpho_sync.db_sync import insert_body_metrics
+from analysis.daily import generate_daily_report
 from notifications.telegram import send_alert
 
 logger = logging.getLogger(__name__)
@@ -65,9 +67,23 @@ def renpho_sync_job() -> None:
             send_alert(f"⚠️ Renpho 同步连续失败 {_renpho_consecutive_failures} 次：{exc}")
 
 
+def daily_report_job() -> None:
+    try:
+        today = datetime.date.today()
+        with SessionLocal() as session:
+            report = generate_daily_report(session, today)
+        if report:
+            send_alert(report)
+        logger.info("Daily report job complete. Report sent: %s", bool(report))
+    except Exception as exc:
+        logger.error("Daily report job failed: %s", exc)
+        send_alert(f"⚠️ 日报生成失败：{exc}")
+
+
 def create_scheduler() -> BackgroundScheduler:
     tz = pytz.timezone("Asia/Shanghai")
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
     scheduler.add_job(renpho_sync_job, "cron", hour=9, minute=0, max_instances=1)
+    scheduler.add_job(daily_report_job, "cron", hour=22, minute=0, max_instances=1)
     return scheduler
