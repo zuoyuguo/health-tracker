@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Phase 1 verification script: Test Garmin account data accessibility"""
-import json
 import sys
 from garmin.client import GarminClient
 from garmin.sync import (
