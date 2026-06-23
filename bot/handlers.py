@@ -78,7 +78,7 @@ def get_today_summary(session, date: datetime.date) -> str:
     total_cal = sum(float(m.total_calories or 0) for m in meals)
     lines = [f"📅 {date} 饮食汇总", ""]
     for meal in meals:
-        time_str = meal.recorded_at.strftime("%H:%M")
+        time_str = meal.recorded_at.astimezone(local_tz).strftime("%H:%M")
         cal_str = f"{float(meal.total_calories):.0f} kcal" if meal.total_calories else "—"
         if meal.user_note and not meal.foods:
             lines.append(f"• {time_str} [{meal.meal_type}] {meal.user_note}")

@@ -1,4 +1,6 @@
 import datetime
+import pytz
+import config
 
 
 def build_daily_prompt(
@@ -19,7 +21,8 @@ def build_daily_prompt(
         for m in meals:
             foods_str = "、".join(f["name"] for f in (m.get("foods") or []) if f.get("name"))
             recorded_at = m.get("recorded_at")
-            time_str = recorded_at.strftime("%H:%M") if isinstance(recorded_at, datetime.datetime) else ""
+            local_tz = pytz.timezone(config.TIMEZONE)
+            time_str = recorded_at.astimezone(local_tz).strftime("%H:%M") if isinstance(recorded_at, datetime.datetime) else ""
             lines.append(
                 f"- {m.get('meal_type', '进餐')}（{time_str}）：{foods_str or '未知食物'}"
                 f" — {m.get('total_calories') or 0:.0f} kcal"
