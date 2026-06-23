@@ -1,5 +1,4 @@
 import datetime
-from typing import Any
 
 
 def fetch_yesterday_sleep(garmin) -> dict:
@@ -20,9 +19,10 @@ def parse_sleep(raw: dict) -> dict:
     def ms_to_iso(ms):
         if ms is None:
             return None
-        return datetime.datetime.utcfromtimestamp(ms / 1000).isoformat()
+        return datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc).isoformat()
 
     return {
+        "sleep_date": dto.get("sleepDate"),
         "total_sleep_min": _sec_to_min(dto.get("sleepTimeSeconds")),
         "deep_sleep_min": _sec_to_min(dto.get("deepSleepSeconds")),
         "light_sleep_min": _sec_to_min(dto.get("lightSleepSeconds")),
