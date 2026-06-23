@@ -56,8 +56,6 @@ def build_daily_prompt(
             parts.append(f"睡眠评分：{sleep['sleep_score']}")
         if sleep.get("resting_hr") is not None:
             parts.append(f"静息心率：{sleep['resting_hr']} bpm")
-        if sleep.get("hrv_avg") is not None:
-            parts.append(f"HRV：{sleep['hrv_avg']:.1f} ms")
         lines.append(" | ".join(parts))
     else:
         lines.append("【昨晚睡眠】无数据")
