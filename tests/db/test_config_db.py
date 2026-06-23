@@ -6,7 +6,8 @@ def test_database_url_from_env(monkeypatch):
 
 
 def test_database_url_default_is_empty(monkeypatch):
-    monkeypatch.delenv("DATABASE_URL", raising=False)
+    # setenv("", ...) overrides .env file value since load_dotenv won't overwrite existing vars
+    monkeypatch.setenv("DATABASE_URL", "")
     import importlib, config
     importlib.reload(config)
     assert config.DATABASE_URL == ""
