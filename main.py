@@ -8,6 +8,7 @@ from bot.handlers import (
     cmd_week,
     cmd_status,
 )
+from scheduler import create_scheduler
 
 
 def create_app() -> Application:
@@ -25,5 +26,11 @@ def create_app() -> Application:
     return app
 
 
-if __name__ == "__main__":
+def _run() -> None:
+    scheduler = create_scheduler()
+    scheduler.start()
     create_app().run_polling()
+
+
+if __name__ == "__main__":
+    _run()
