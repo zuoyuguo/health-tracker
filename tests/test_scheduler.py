@@ -66,6 +66,14 @@ def test_garmin_sync_job_no_alert_before_3_failures():
     mock_alert.assert_not_called()
 
 
+def test_garmin_sync_job_no_alert_after_3rd_failure():
+    with patch("scheduler.GarminClient", side_effect=Exception("fail")), \
+         patch("scheduler.send_alert") as mock_alert:
+        for _ in range(4):
+            sched_mod.garmin_sync_job()
+    mock_alert.assert_called_once()  # only on the 3rd, not the 4th
+
+
 def test_garmin_sync_job_skips_upsert_when_sleep_date_missing():
     mock_client = _make_mock_garmin_client()
     mock_session = MagicMock()

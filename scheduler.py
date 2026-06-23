@@ -35,8 +35,8 @@ def garmin_sync_job() -> None:
     except Exception as exc:
         _consecutive_failures += 1
         logger.error("Garmin sync failed (attempt %d): %s", _consecutive_failures, exc)
-        if _consecutive_failures >= 3:
-            send_alert(f"Garmin sync failed {_consecutive_failures} times in a row: {exc}")
+        if _consecutive_failures == 3:
+            send_alert(f"⚠️ Garmin 同步连续失败 {_consecutive_failures} 次：{exc}")
 
 
 def create_scheduler() -> BackgroundScheduler:
