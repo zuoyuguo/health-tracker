@@ -5,7 +5,7 @@ import config
 from apscheduler.schedulers.background import BackgroundScheduler
 from db.base import SessionLocal
 from garmin.client import GarminClient
-from garmin.sync import fetch_yesterday_sleep, fetch_yesterday_activities, parse_sleep, parse_activity
+from garmin.sync import fetch_yesterday_sleep, fetch_yesterday_hrv, fetch_yesterday_activities, parse_sleep, parse_activity
 from garmin.db_sync import upsert_sleep, insert_activities
 from renpho_sync.client import RenphoClientWrapper
 from renpho_sync.sync import fetch_recent_measurements, parse_measurement
@@ -28,6 +28,8 @@ def garmin_sync_job() -> None:
 
         with SessionLocal() as session:
             raw_sleep = fetch_yesterday_sleep(client.garmin)
+            raw_hrv = fetch_yesterday_hrv(client.garmin)
+            raw_sleep["hrv_summary"] = raw_hrv.get("hrvSummary", {})
             parsed_sleep = parse_sleep(raw_sleep)
             if parsed_sleep.get("sleep_date"):
                 upsert_sleep(session, parsed_sleep)

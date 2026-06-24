@@ -160,7 +160,7 @@ async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     local_tz = pytz.timezone(config.TIMEZONE)
-    week_end = datetime.datetime.now(local_tz).date() - datetime.timedelta(days=1)
+    week_end = datetime.datetime.now(local_tz).date()
     with SessionLocal() as session:
         report = generate_weekly_report(session, week_end)
     if report:

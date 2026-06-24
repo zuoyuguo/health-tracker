@@ -12,6 +12,10 @@ def fetch_yesterday_sleep(garmin) -> dict:
     return garmin.get_sleep_data(_yesterday_local())
 
 
+def fetch_yesterday_hrv(garmin) -> dict:
+    return garmin.get_hrv_data(_yesterday_local())
+
+
 def fetch_yesterday_activities(garmin) -> list[dict]:
     yesterday = _yesterday_local()
     return garmin.get_activities_by_date(yesterday, yesterday)
@@ -27,6 +31,8 @@ def parse_sleep(raw: dict) -> dict:
             return None
         return datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc).isoformat()
 
+    hrv_summary = raw.get("hrv_summary") or {}
+
     return {
         "sleep_date": dto.get("calendarDate") or dto.get("sleepDate"),
         "total_sleep_min": _sec_to_min(dto.get("sleepTimeSeconds")),
@@ -36,6 +42,7 @@ def parse_sleep(raw: dict) -> dict:
         "awake_min": _sec_to_min(dto.get("awakeSleepSeconds")),
         "sleep_score": overall.get("value") if overall else None,
         "resting_hr": raw.get("restingHeartRate"),
+        "hrv_avg": hrv_summary.get("lastNightAvg"),
         "sleep_start": ms_to_iso(dto.get("sleepStartTimestampGMT")),
         "sleep_end": ms_to_iso(dto.get("sleepEndTimestampGMT")),
     }

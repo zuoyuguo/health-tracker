@@ -25,6 +25,7 @@ def test_garmin_sync_job_resets_counter_on_success():
 
     with patch("scheduler.GarminClient", return_value=mock_client), \
          patch("scheduler.fetch_yesterday_sleep", return_value={"dailySleepDTO": {}}), \
+         patch("scheduler.fetch_yesterday_hrv", return_value={}), \
          patch("scheduler.fetch_yesterday_activities", return_value=[]), \
          patch("scheduler.parse_sleep", return_value={"sleep_date": "2026-06-21"}), \
          patch("scheduler.upsert_sleep"), \
@@ -82,6 +83,7 @@ def test_garmin_sync_job_skips_upsert_when_sleep_date_missing():
 
     with patch("scheduler.GarminClient", return_value=mock_client), \
          patch("scheduler.fetch_yesterday_sleep", return_value={}), \
+         patch("scheduler.fetch_yesterday_hrv", return_value={}), \
          patch("scheduler.fetch_yesterday_activities", return_value=[]), \
          patch("scheduler.parse_sleep", return_value={"sleep_date": None}), \
          patch("scheduler.upsert_sleep") as mock_upsert, \
