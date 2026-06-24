@@ -101,9 +101,9 @@ def test_collect_excludes_meals_from_other_days(session):
     assert data["meals"] == []
 
 
-def test_collect_returns_yesterdays_sleep(session):
+def test_collect_returns_todays_sleep(session):
     from analysis.daily import collect_daily_data
-    _add_sleep(session, date=_YESTERDAY)
+    _add_sleep(session, date=_TODAY)
     data = collect_daily_data(session, _TODAY)
     assert data["sleep"] is not None
     assert data["sleep"]["total_sleep_min"] == 450

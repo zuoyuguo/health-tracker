@@ -50,7 +50,7 @@ def _add_activity(session, date=_WEEK_END):
 
 def _add_sleep(session, date=_WEEK_END):
     s = Sleep(
-        sleep_date=date - datetime.timedelta(days=1),
+        sleep_date=date,
         total_sleep_min=420,
         deep_sleep_min=90,
         rem_sleep_min=75,

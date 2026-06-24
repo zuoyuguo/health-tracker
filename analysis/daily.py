@@ -10,15 +10,13 @@ def collect_daily_data(session, date: datetime.date) -> dict:
     local_tz = pytz.timezone(config.TIMEZONE)
     start = local_tz.localize(datetime.datetime.combine(date, datetime.time.min))
     end = local_tz.localize(datetime.datetime.combine(date, datetime.time.max))
-    yesterday = date - datetime.timedelta(days=1)
-
     meal_rows = session.query(Meal).filter(
         Meal.confirmed == True,
         Meal.recorded_at >= start,
         Meal.recorded_at <= end,
     ).order_by(Meal.recorded_at).all()
 
-    sleep_row = session.query(Sleep).filter_by(sleep_date=yesterday).first()
+    sleep_row = session.query(Sleep).filter_by(sleep_date=date).first()
 
     activity_rows = session.query(Activity).filter_by(activity_date=date).all()
 

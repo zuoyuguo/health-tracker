@@ -15,8 +15,6 @@ def collect_weekly_data(session, week_end: datetime.date) -> list[dict]:
         date = week_start + datetime.timedelta(days=i)
         start_dt = local_tz.localize(datetime.datetime.combine(date, datetime.time.min))
         end_dt = local_tz.localize(datetime.datetime.combine(date, datetime.time.max))
-        yesterday = date - datetime.timedelta(days=1)
-
         meal_rows = (
             session.query(Meal)
             .filter(
@@ -28,7 +26,7 @@ def collect_weekly_data(session, week_end: datetime.date) -> list[dict]:
             .all()
         )
 
-        sleep_row = session.query(Sleep).filter_by(sleep_date=yesterday).first()
+        sleep_row = session.query(Sleep).filter_by(sleep_date=date).first()
 
         activity_rows = session.query(Activity).filter_by(activity_date=date).all()
 
