@@ -10,6 +10,7 @@ from garmin.sync import (
 
 SLEEP_FIXTURE = {
     "dailySleepDTO": {
+        "calendarDate": "2026-06-22",
         "sleepTimeSeconds": 27000,       # 450 min = 7.5h
         "deepSleepSeconds": 5400,        # 90 min
         "lightSleepSeconds": 14400,      # 240 min
@@ -109,12 +110,18 @@ def test_parse_activity_missing_hr_zones_returns_none():
     assert result["hr_zone_1_min"] is None
 
 
+def test_parse_sleep_uses_calendar_date():
+    result = parse_sleep(SLEEP_FIXTURE)
+    assert result["sleep_date"] == "2026-06-22"
+
+
 def test_fetch_yesterday_sleep_calls_api(monkeypatch):
     mock_garmin = MagicMock()
     mock_garmin.get_sleep_data.return_value = SLEEP_FIXTURE
 
-    import datetime
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    import datetime, pytz, config
+    local_tz = pytz.timezone(config.TIMEZONE)
+    yesterday = (datetime.datetime.now(local_tz).date() - datetime.timedelta(days=1)).isoformat()
     result = fetch_yesterday_sleep(mock_garmin)
 
     mock_garmin.get_sleep_data.assert_called_once_with(yesterday)
@@ -125,8 +132,9 @@ def test_fetch_yesterday_activities_calls_api():
     mock_garmin = MagicMock()
     mock_garmin.get_activities_by_date.return_value = [ACTIVITY_FIXTURE]
 
-    import datetime
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    import datetime, pytz, config
+    local_tz = pytz.timezone(config.TIMEZONE)
+    yesterday = (datetime.datetime.now(local_tz).date() - datetime.timedelta(days=1)).isoformat()
     result = fetch_yesterday_activities(mock_garmin)
 
     mock_garmin.get_activities_by_date.assert_called_once_with(yesterday, yesterday)

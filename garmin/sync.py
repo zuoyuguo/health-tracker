@@ -1,13 +1,19 @@
 import datetime
+import pytz
+import config
+
+
+def _yesterday_local() -> str:
+    tz = pytz.timezone(config.TIMEZONE)
+    return (datetime.datetime.now(tz).date() - datetime.timedelta(days=1)).isoformat()
 
 
 def fetch_yesterday_sleep(garmin) -> dict:
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
-    return garmin.get_sleep_data(yesterday)
+    return garmin.get_sleep_data(_yesterday_local())
 
 
 def fetch_yesterday_activities(garmin) -> list[dict]:
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    yesterday = _yesterday_local()
     return garmin.get_activities_by_date(yesterday, yesterday)
 
 
@@ -22,7 +28,7 @@ def parse_sleep(raw: dict) -> dict:
         return datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc).isoformat()
 
     return {
-        "sleep_date": dto.get("sleepDate"),
+        "sleep_date": dto.get("calendarDate") or dto.get("sleepDate"),
         "total_sleep_min": _sec_to_min(dto.get("sleepTimeSeconds")),
         "deep_sleep_min": _sec_to_min(dto.get("deepSleepSeconds")),
         "light_sleep_min": _sec_to_min(dto.get("lightSleepSeconds")),
