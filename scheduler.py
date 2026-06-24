@@ -46,7 +46,7 @@ def garmin_sync_job() -> None:
         _garmin_consecutive_failures += 1
         logger.error("Garmin sync failed (attempt %d): %s", _garmin_consecutive_failures, exc)
         if _garmin_consecutive_failures == 3:
-            send_alert(f"⚠️ Garmin 同步连续失败 {_garmin_consecutive_failures} 次：{exc}")
+            send_alert(f"⚠️ Garmin 同步连续失败 {_garmin_consecutive_failures} 次，请检查日志")
 
 
 def renpho_sync_job() -> None:
@@ -68,7 +68,7 @@ def renpho_sync_job() -> None:
         _renpho_consecutive_failures += 1
         logger.error("Renpho sync failed (attempt %d): %s", _renpho_consecutive_failures, exc)
         if _renpho_consecutive_failures == 3:
-            send_alert(f"⚠️ Renpho 同步连续失败 {_renpho_consecutive_failures} 次：{exc}")
+            send_alert(f"⚠️ Renpho 同步连续失败 {_renpho_consecutive_failures} 次，请检查日志")
 
 
 def daily_report_job() -> None:
@@ -81,7 +81,7 @@ def daily_report_job() -> None:
         logger.info("Daily report job complete. Report sent: %s", bool(report))
     except Exception as exc:
         logger.error("Daily report job failed: %s", exc)
-        send_alert(f"⚠️ 日报生成失败：{exc}")
+        send_alert("⚠️ 日报生成失败，请检查日志")
 
 
 def weekly_report_job() -> None:
@@ -94,7 +94,7 @@ def weekly_report_job() -> None:
         logger.info("Weekly report job complete. Report sent: %s", bool(report))
     except Exception as exc:
         logger.error("Weekly report job failed: %s", exc)
-        send_alert(f"⚠️ 周报生成失败：{exc}")
+        send_alert("⚠️ 周报生成失败，请检查日志")
 
 
 def create_scheduler() -> BackgroundScheduler:

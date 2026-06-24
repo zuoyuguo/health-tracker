@@ -182,7 +182,17 @@ def test_get_today_summary_excludes_unconfirmed(session):
 
 
 import asyncio
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+import config as _config
+
+
+_TEST_CHAT_ID = 123456789
+
+
+@pytest.fixture(autouse=True)
+def patch_chat_id(monkeypatch):
+    monkeypatch.setattr(_config, "TELEGRAM_CHAT_ID", str(_TEST_CHAT_ID))
 
 
 def _make_update(text=None, has_photo=False, args=None):
@@ -190,9 +200,11 @@ def _make_update(text=None, has_photo=False, args=None):
     update.message.reply_text = AsyncMock()
     update.message.text = text
     update.message.date = datetime.datetime(2026, 6, 22, 12, 0, tzinfo=datetime.timezone.utc)
+    update.effective_chat.id = _TEST_CHAT_ID
     if has_photo:
         photo_mock = MagicMock()
         photo_mock.file_id = "test-file-id"
+        photo_mock.file_size = 1024
         update.message.photo = [photo_mock]
     else:
         update.message.photo = []
@@ -391,9 +403,8 @@ def test_cmd_week_sends_report_when_data_available(session):
     from bot.handlers import cmd_week
     report_text = "📊 本周周报：运动两次，睡眠质量提升。"
 
-    update = MagicMock()
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
+    update = _make_update()
+    context = _make_context()
 
     with patch("bot.handlers.generate_weekly_report", return_value=report_text), \
          patch("bot.handlers.SessionLocal") as MockSession:
@@ -407,9 +418,8 @@ def test_cmd_week_sends_report_when_data_available(session):
 def test_cmd_week_sends_no_data_message_when_report_is_none(session):
     from bot.handlers import cmd_week
 
-    update = MagicMock()
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
+    update = _make_update()
+    context = _make_context()
 
     with patch("bot.handlers.generate_weekly_report", return_value=None), \
          patch("bot.handlers.SessionLocal") as MockSession:

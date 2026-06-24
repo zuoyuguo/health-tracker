@@ -1,5 +1,7 @@
 import datetime
+import logging
 import pytz
+from functools import wraps
 from sqlalchemy import func
 
 from telegram import Update
@@ -11,7 +13,22 @@ from db.base import SessionLocal
 from db.models import Meal, Sleep, Activity, BodyMetric
 from analysis.weekly import generate_weekly_report
 
+logger = logging.getLogger(__name__)
+
 PENDING_MEAL_KEY = "pending_meal"
+MAX_NOTE_LENGTH = 500
+MAX_PHOTO_BYTES = 5_000_000
+
+
+def require_owner(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not config.TELEGRAM_CHAT_ID:
+            return
+        if update.effective_chat.id != int(config.TELEGRAM_CHAT_ID):
+            return
+        return await func(update, context)
+    return wrapper
 
 
 def infer_meal_type(dt: datetime.datetime) -> str:
@@ -90,14 +107,19 @@ def get_today_summary(session, date: datetime.date) -> str:
     return "\n".join(lines)
 
 
+@require_owner
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("识别中...")
     photo = update.message.photo[-1]
+    if photo.file_size and photo.file_size > MAX_PHOTO_BYTES:
+        await update.message.reply_text("图片太大，请压缩后重试")
+        return
     tg_file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await tg_file.download_as_bytearray())
     try:
         data = analyze_food_photo(image_bytes)
     except Exception:
+        logger.exception("Food photo analysis failed")
         await update.message.reply_text("识别失败，请稍后重试 🙏")
         return
     context.user_data[PENDING_MEAL_KEY] = {
@@ -107,8 +129,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(format_meal_summary(data))
 
 
+@require_owner
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (update.message.text or "").strip()
+    text = (update.message.text or "").strip()[:MAX_NOTE_LENGTH]
     pending = context.user_data.get(PENDING_MEAL_KEY)
     if not pending:
         if text == "确认":
@@ -125,12 +148,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         try:
             new_data = apply_correction(pending["data"], text)
         except Exception:
+            logger.exception("Food correction failed")
             await update.message.reply_text("修正失败，请重试 🙏")
             return
         context.user_data[PENDING_MEAL_KEY]["data"] = new_data
         await update.message.reply_text(format_meal_summary(new_data))
 
 
+@require_owner
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     local_tz = pytz.timezone(config.TIMEZONE)
     today = datetime.datetime.now(local_tz).date()
@@ -139,8 +164,9 @@ async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(reply)
 
 
+@require_owner
 async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    note = " ".join(context.args) if context.args else ""
+    note = " ".join(context.args).strip()[:MAX_NOTE_LENGTH] if context.args else ""
     if not note:
         await update.message.reply_text("用法：/note <备注内容>，例如：/note 喝了一杯咖啡")
         return
@@ -158,6 +184,7 @@ async def cmd_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"✅ 备注已保存：{note}")
 
 
+@require_owner
 async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     local_tz = pytz.timezone(config.TIMEZONE)
     week_end = datetime.datetime.now(local_tz).date()
@@ -169,6 +196,7 @@ async def cmd_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("📭 近7天暂无饮食或运动记录，无法生成周报")
 
 
+@require_owner
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with SessionLocal() as session:
         last_sleep = session.query(Sleep).order_by(Sleep.created_at.desc()).first()
