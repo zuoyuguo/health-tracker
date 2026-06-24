@@ -49,7 +49,9 @@ def test_parse_measurement_basic_fields():
         "water": 55.0,
         "visfat": 6.0,
         "bmr": 1650,
-        "sinew": 57.6,
+        "fatFreeWeight": 57.6,
+        "muscle": 46.0,
+        "bone": 3.1,
     }
     result = parse_measurement(raw)
 
@@ -61,6 +63,9 @@ def test_parse_measurement_basic_fields():
     assert result["visceral_fat"] == 6.0
     assert result["bmr_kcal"] == 1650
     assert result["lean_mass_kg"] == 57.6
+    assert result["muscle_mass_kg"] == 46.0
+    assert result["bone_mass_kg"] == 3.1
+    assert result["fat_mass_kg"] == round(70.5 * 18.3 / 100, 2)
     expected_dt = datetime.datetime.fromtimestamp(now_ts, tz=datetime.timezone.utc)
     assert result["measured_at"] == expected_dt
 
@@ -90,7 +95,7 @@ def test_parse_measurement_nullable_fields_absent():
     raw = {"timeStamp": 1700000000, "weight": 70.0, "id": "x"}
     result = parse_measurement(raw)
 
-    assert result["fat_mass_kg"] is None
+    assert result["fat_mass_kg"] is None  # bodyfat absent → cannot compute
     assert result["muscle_mass_kg"] is None
     assert result["bone_mass_kg"] is None
     assert result["lean_mass_kg"] is None
@@ -107,8 +112,8 @@ def test_parse_measurement_bmr_is_int():
     assert isinstance(result["bmr_kcal"], int)
 
 
-def test_parse_measurement_lean_mass_uses_sinew_when_zero():
+def test_parse_measurement_lean_mass_uses_fat_free_weight():
     from renpho_sync.sync import parse_measurement
-    raw = {"timeStamp": 1700000000, "id": "x", "sinew": 0.0, "lbm": 57.0}
+    raw = {"timeStamp": 1700000000, "id": "x", "fatFreeWeight": 64.24}
     result = parse_measurement(raw)
-    assert result["lean_mass_kg"] == 0.0  # must NOT fall through to lbm
+    assert result["lean_mass_kg"] == 64.24

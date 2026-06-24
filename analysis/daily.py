@@ -33,7 +33,7 @@ def collect_daily_data(session, date: datetime.date) -> dict:
 
 
 def has_data(data: dict) -> bool:
-    return bool(data["meals"] or data["activities"])
+    return bool(data["meals"] or data["activities"] or data["sleep"])
 
 
 def generate_daily_report(session, date: datetime.date) -> str | None:

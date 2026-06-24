@@ -29,18 +29,20 @@ def parse_measurement(raw: dict) -> dict:
     bmr_raw = raw.get("bmr")
     bmr_kcal = int(bmr_raw) if bmr_raw is not None else None
 
-    _sinew = raw.get("sinew")
+    weight = raw.get("weight")
+    bodyfat = raw.get("bodyfat")
+    fat_mass = round(weight * bodyfat / 100, 2) if weight and bodyfat else None
 
     return {
         "renpho_record_id": renpho_record_id,
         "measured_at": measured_at,
-        "weight_kg": raw.get("weight"),
+        "weight_kg": weight,
         "bmi": raw.get("bmi"),
-        "body_fat_pct": raw.get("bodyfat"),
-        "fat_mass_kg": raw.get("bodyfat_mass"),
-        "lean_mass_kg": _sinew if _sinew is not None else raw.get("lbm"),
-        "muscle_mass_kg": raw.get("muscle_mass"),
-        "bone_mass_kg": raw.get("bone_mass"),
+        "body_fat_pct": bodyfat,
+        "fat_mass_kg": fat_mass,
+        "lean_mass_kg": raw.get("fatFreeWeight"),
+        "muscle_mass_kg": raw.get("muscle"),
+        "bone_mass_kg": raw.get("bone"),
         "water_pct": raw.get("water"),
         "visceral_fat": raw.get("visfat"),
         "bmr_kcal": bmr_kcal,
