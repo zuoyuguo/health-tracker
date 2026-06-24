@@ -5,7 +5,10 @@ import config
 from apscheduler.schedulers.background import BackgroundScheduler
 from db.base import SessionLocal
 from garmin.client import GarminClient
-from garmin.sync import fetch_yesterday_sleep, fetch_yesterday_hrv, fetch_yesterday_activities, parse_sleep, parse_activity
+from garmin.sync import (
+    fetch_yesterday_activities, fetch_today_sleep, fetch_today_hrv,
+    fetch_today_activities, parse_sleep, parse_activity,
+)
 from garmin.db_sync import upsert_sleep, insert_activities
 from renpho_sync.client import RenphoClientWrapper
 from renpho_sync.sync import fetch_recent_measurements, parse_measurement
@@ -27,20 +30,21 @@ def garmin_sync_job() -> None:
         client.connect()
 
         with SessionLocal() as session:
-            raw_sleep = fetch_yesterday_sleep(client.garmin)
-            raw_hrv = fetch_yesterday_hrv(client.garmin)
+            raw_sleep = fetch_today_sleep(client.garmin)
+            raw_hrv = fetch_today_hrv(client.garmin)
             raw_sleep["hrv_summary"] = raw_hrv.get("hrvSummary", {})
             parsed_sleep = parse_sleep(raw_sleep)
             if parsed_sleep.get("sleep_date"):
                 upsert_sleep(session, parsed_sleep)
 
+            # 昨日活动（防止 Garmin 延迟上传）
             raw_activities = fetch_yesterday_activities(client.garmin)
             parsed_activities = [parse_activity(a) for a in raw_activities]
             count = insert_activities(session, parsed_activities)
             session.commit()
 
         _garmin_consecutive_failures = 0
-        logger.info("Garmin sync complete. Activities inserted: %d", count)
+        logger.info("Garmin morning sync complete. Activities inserted: %d", count)
 
     except Exception as exc:
         _garmin_consecutive_failures += 1
@@ -69,6 +73,28 @@ def renpho_sync_job() -> None:
         logger.error("Renpho sync failed (attempt %d): %s", _renpho_consecutive_failures, exc)
         if _renpho_consecutive_failures == 3:
             send_alert(f"⚠️ Renpho 同步连续失败 {_renpho_consecutive_failures} 次，请检查日志")
+
+
+def garmin_activity_evening_job() -> None:
+    global _garmin_consecutive_failures
+    try:
+        client = GarminClient()
+        client.connect()
+
+        with SessionLocal() as session:
+            raw_activities = fetch_today_activities(client.garmin)
+            parsed_activities = [parse_activity(a) for a in raw_activities]
+            count = insert_activities(session, parsed_activities)
+            session.commit()
+
+        _garmin_consecutive_failures = 0
+        logger.info("Garmin evening activity sync complete. Activities inserted: %d", count)
+
+    except Exception as exc:
+        _garmin_consecutive_failures += 1
+        logger.error("Garmin evening sync failed (attempt %d): %s", _garmin_consecutive_failures, exc)
+        if _garmin_consecutive_failures == 3:
+            send_alert(f"⚠️ Garmin 同步连续失败 {_garmin_consecutive_failures} 次，请检查日志")
 
 
 def daily_report_job() -> None:
@@ -102,6 +128,7 @@ def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
     scheduler.add_job(renpho_sync_job, "cron", hour=9, minute=0, max_instances=1)
+    scheduler.add_job(garmin_activity_evening_job, "cron", hour=21, minute=30, max_instances=1)
     scheduler.add_job(daily_report_job, "cron", hour=22, minute=0, max_instances=1)
     scheduler.add_job(weekly_report_job, "cron", day_of_week="mon", hour=8, minute=0, max_instances=1)
     return scheduler

@@ -24,8 +24,8 @@ def test_garmin_sync_job_resets_counter_on_success():
     mock_session = MagicMock()
 
     with patch("scheduler.GarminClient", return_value=mock_client), \
-         patch("scheduler.fetch_yesterday_sleep", return_value={"dailySleepDTO": {}}), \
-         patch("scheduler.fetch_yesterday_hrv", return_value={}), \
+         patch("scheduler.fetch_today_sleep", return_value={"dailySleepDTO": {}}), \
+         patch("scheduler.fetch_today_hrv", return_value={}), \
          patch("scheduler.fetch_yesterday_activities", return_value=[]), \
          patch("scheduler.parse_sleep", return_value={"sleep_date": "2026-06-21"}), \
          patch("scheduler.upsert_sleep"), \
@@ -82,8 +82,8 @@ def test_garmin_sync_job_skips_upsert_when_sleep_date_missing():
     mock_session = MagicMock()
 
     with patch("scheduler.GarminClient", return_value=mock_client), \
-         patch("scheduler.fetch_yesterday_sleep", return_value={}), \
-         patch("scheduler.fetch_yesterday_hrv", return_value={}), \
+         patch("scheduler.fetch_today_sleep", return_value={}), \
+         patch("scheduler.fetch_today_hrv", return_value={}), \
          patch("scheduler.fetch_yesterday_activities", return_value=[]), \
          patch("scheduler.parse_sleep", return_value={"sleep_date": None}), \
          patch("scheduler.upsert_sleep") as mock_upsert, \
@@ -101,7 +101,7 @@ def test_create_scheduler_returns_scheduler_with_four_jobs():
     scheduler = sched_mod.create_scheduler()
     assert isinstance(scheduler, BackgroundScheduler)
     jobs = scheduler.get_jobs()
-    assert len(jobs) == 4
+    assert len(jobs) == 5
     for job in jobs:
         assert job.trigger.__class__.__name__ == "CronTrigger"
 

@@ -8,6 +8,11 @@ def _yesterday_local() -> str:
     return (datetime.datetime.now(tz).date() - datetime.timedelta(days=1)).isoformat()
 
 
+def _today_local() -> str:
+    tz = pytz.timezone(config.TIMEZONE)
+    return datetime.datetime.now(tz).date().isoformat()
+
+
 def fetch_yesterday_sleep(garmin) -> dict:
     return garmin.get_sleep_data(_yesterday_local())
 
@@ -19,6 +24,19 @@ def fetch_yesterday_hrv(garmin) -> dict:
 def fetch_yesterday_activities(garmin) -> list[dict]:
     yesterday = _yesterday_local()
     return garmin.get_activities_by_date(yesterday, yesterday)
+
+
+def fetch_today_sleep(garmin) -> dict:
+    return garmin.get_sleep_data(_today_local())
+
+
+def fetch_today_hrv(garmin) -> dict:
+    return garmin.get_hrv_data(_today_local())
+
+
+def fetch_today_activities(garmin) -> list[dict]:
+    today = _today_local()
+    return garmin.get_activities_by_date(today, today)
 
 
 def parse_sleep(raw: dict) -> dict:
