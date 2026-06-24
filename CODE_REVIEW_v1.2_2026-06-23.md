@@ -2,11 +2,11 @@
 
 | 项目 | 内容 |
 |---|---|
-| **报告版本号** | **v1.2（架构师复核完成）** |
+| **报告版本号** | **v1.2（架构师复核完成）→ 开发安全自查补录，待升版至 v1.3** |
 | 评审日期 | 2026-06-23 |
-| 修订说明 | v1.1：据用户居住地 Fremont, CA 修正 P1-1 时区目标为 America/Los_Angeles。<br>v1.2：**复核**开发修复（commit 06c2fb1）——P1-1 / P1-2 / P2-1 / P2-6 验证通过并关闭；P2-2/3/4/5/7 接受延迟处理，转入跟踪。 |
+| 修订说明 | v1.1：据用户居住地 Fremont, CA 修正 P1-1 时区目标为 America/Los_Angeles。<br>v1.2：**复核**开发修复（commit 06c2fb1）——P1-1 / P1-2 / P2-1 / P2-6 验证通过并关闭；P2-2/3/4/5/7 接受延迟处理，转入跟踪。<br>v1.2+：上线测试期间补修若干缺陷（时间显示、睡眠日期对齐、HRV 同步、Renpho 字段映射）；安全自查发现 1 Critical + 1 High，已全部修复（commit 7db69e4）。 |
 | 开发回填日期 | 2026-06-23（commit 72d51f0） |
-| 开发回填说明 | P1-1、P1-2、P2-1、P2-6 已修复（commit 06c2fb1）；P2-2、P2-3、P2-4、P2-5、P2-7 延迟处理（见各条说明）；174 个测试全部通过 |
+| 开发回填说明 | P1-1、P1-2、P2-1、P2-6 已修复（commit 06c2fb1）；P2-2（HRV 已落地，commit 198c534）、P2-4（字段修正，commit 2e02e50）、P2-5（has_data 纳入睡眠，commit 2e02e50）已完成；P2-3、P2-7 延迟处理；175 个测试全部通过 |
 | 复核结论 | **通过，可上线**。四项修复经核验全部正确落地（详见下方「复核结论 v1.2」）；延迟项理由合理，已转入跟踪清单。 |
 | 评审对象 | health-tracker（Telegram Bot + Garmin/Renpho 同步 + AI 日报/周报） |
 | 评审基准 | PRD.md（文档版本 v1.1） |
@@ -44,6 +44,90 @@
 | P2-7 sqlite 回落文档 | 生产恒有 DATABASE_URL，补 README 即可 | 同意。补 README 即关闭 |
 
 **上线放行**：P1/P2 中的上线前必修项（P1-1、P1-2）与配置项（P2-6）已全部解决，**可以上线**。延迟项均为非阻塞，按上表残留风险跟踪即可。
+
+---
+
+## 上线测试期间补修（2026-06-23）
+
+上线后线上测试发现并修复以下问题：
+
+| commit | 问题 | 修复内容 |
+|---|---|---|
+| a3a5d5f | 饮食时间显示 UTC 而非本地时间 | `get_today_summary` 和 `build_daily_prompt` 的 `recorded_at.strftime()` 改为先 `.astimezone(local_tz)` |
+| cb4af8c | Garmin 睡眠 `sleep_date` 恒为 None | `parse_sleep` 读 `calendarDate`（实际字段）而非 `sleepDate`（不存在）；`fetch_yesterday` 改用本地时区 |
+| f74ee24 | 周报/日报睡眠数据始终缺失 | `collect_daily_data` / `collect_weekly_data` 查询改为 `sleep_date=date`（Garmin calendarDate = 醒来日期） |
+| 198c534 | HRV 未同步；`/week` 不含今日数据 | 新增 `fetch_yesterday_hrv()`，scheduler 合并 HRV 到 sleep raw；`cmd_week` 的 `week_end` 改为 today |
+| 2e02e50 | Renpho 字段映射错误（P2-4）；`has_data` 不含睡眠（P2-5） | 字段修正：`fatFreeWeight/muscle/bone`，`fat_mass_kg` 改为计算值；`has_data` 纳入 `sleep` |
+| e1c15d1 | Railway 容器重启后 Garmin token 丢失 | `ensure_token_file()` 从 `GARMIN_TOKEN_JSON` 环境变量恢复 token 到磁盘 |
+
+---
+
+## 安全自查（2026-06-23，commit 7db69e4）
+
+上线测试完成后，开发对全量代码进行安全自查，发现并修复以下问题：
+
+### S1 — Critical：Telegram Bot 无鉴权
+
+**问题**：所有 Bot 指令（`handle_photo` / `handle_text` / `cmd_today` / `cmd_note` / `cmd_week` / `cmd_status`）未校验发送者身份，任何知道 Bot 用户名的 Telegram 用户均可触发食物记录、查看睡眠/体重/运动等个人健康数据，并消耗 Claude API 额度。
+
+**修复**：新增 `require_owner` 装饰器（`bot/handlers.py`），对所有 handler 校验 `update.effective_chat.id == int(config.TELEGRAM_CHAT_ID)`，不匹配则静默丢弃（不回复，避免暴露 Bot 存在）。
+
+**状态**：✅ 已修复 — commit `7db69e4`
+
+---
+
+### S2 — High：异常信息泄露到 Telegram 告警
+
+**问题**：`scheduler.py` 的失败告警直接将 `{exc}` 字符串发送至 Telegram，可能暴露数据库连接串（`postgresql://user:password@host/db`）、Garmin/Renpho API 错误详情等敏感信息。
+
+**修复**：告警改为通用文字（「请检查日志」），完整异常信息通过 `logger.error()` 保留在 Railway 日志中，不对外暴露。
+
+**状态**：✅ 已修复 — commit `7db69e4`
+
+---
+
+### S3 — Medium：用户输入无长度上限
+
+**问题**：`handle_text` 的修正文本和 `/note` 指令内容未截断，极端情况下可提交超长文本进入 Claude API 请求体，增加 token 消耗。
+
+**修复**：所有用户输入截断至 `MAX_NOTE_LENGTH = 500` 字符。
+
+**状态**：✅ 已修复 — commit `7db69e4`
+
+---
+
+### S4 — Medium：图片无大小限制
+
+**问题**：`handle_photo` 未检查图片文件大小即下载并调用 Claude Vision API，恶意用户可上传大图重复触发消耗 API 额度。
+
+**修复**：下载前检查 `photo.file_size > MAX_PHOTO_BYTES`（5 MB），超限直接拒绝并提示压缩。
+
+**状态**：✅ 已修复 — commit `7db69e4`
+
+---
+
+### S5 — Medium：`except Exception` 未记录日志
+
+**问题**：`handle_photo` 和 `handle_text` 的 `except Exception` 块直接返回通用提示，不记录日志，导致生产异常难以排查。
+
+**修复**：改为 `logger.exception(...)` 后再回复用户，完整堆栈写入 Railway 日志。
+
+**状态**：✅ 已修复 — commit `7db69e4`
+
+---
+
+### 自查通过项
+
+| 检查点 | 结论 |
+|---|---|
+| SQL 注入 | ✅ 全部使用 SQLAlchemy ORM 参数化查询，无裸字符串拼接 |
+| 凭证硬编码 | ✅ 所有密钥/密码均通过 `os.getenv()` 读取，无硬编码 |
+| `.gitignore` | ✅ `.env` / `*.tokens` 均在忽略列表，`git ls-files` 确认无敏感文件入库 |
+| Garmin JWT | ✅ 仅存于 Railway 环境变量，启动时写入临时文件，不写入日志 |
+| DATABASE_URL | ✅ 仅从环境变量读取，不出现在日志或错误消息中 |
+| Anthropic/Renpho 凭证 | ✅ 直接传入 SDK 构造函数，不写入日志 |
+
+**自查结论**：Critical × 1、High × 1、Medium × 3，全部已修复；无 SQL 注入、无凭证泄露风险。代码安全状态良好，可提交架构师复核升版至 v1.3。
 
 ---
 
