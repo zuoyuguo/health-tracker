@@ -1,7 +1,7 @@
 # 健康问答功能设计文档
 
 **日期：** 2026-06-25
-**状态：** 待审核
+**状态：** 架构师已批准（含修订）
 
 ---
 
@@ -95,20 +95,28 @@ HRV：均值 52ms（3天数据）
 
 ### `bot/qwen.py`
 
-使用 `openai` SDK 的 OpenAI 兼容模式调用 DashScope：
+使用 `openai` SDK 的 OpenAI 兼容模式调用 DashScope。客户端采用 lazy init，避免 import 时以空 key 实例化：
 
 ```python
 from openai import OpenAI
 
-_client = OpenAI(
-    api_key=config.DASHSCOPE_API_KEY,
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-)
+_client: OpenAI | None = None
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        if not config.DASHSCOPE_API_KEY:
+            raise RuntimeError("DASHSCOPE_API_KEY not configured")
+        _client = OpenAI(
+            api_key=config.DASHSCOPE_API_KEY,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+    return _client
 ```
 
-核心函数：
+核心函数返回回复文本及截断后的 history（调用方用返回值更新 `user_data`，`chat` 本身保持纯函数）：
 ```python
-def chat(history: list[dict], health_context: str) -> str
+def chat(history: list[dict], health_context: str) -> tuple[str, list[dict]]
 ```
 
 System prompt：
@@ -129,9 +137,16 @@ async def cmd_ask(update, context):
     if not question:
         await update.message.reply_text("用法：/ask <你的问题>，例如：/ask 我最近睡眠质量怎么样？")
         return
-    # 初始化或追加 history
-    # 调用 build_health_context + qwen.chat
-    # 更新 qa_history 和 qa_last_active
+    # 首次 /ask：查一次 DB，缓存到 user_data["qa_health_context"]，后续多轮复用
+    if "qa_health_context" not in context.user_data:
+        with SessionLocal() as session:
+            context.user_data["qa_health_context"] = build_health_context(session)
+    history = context.user_data.get("qa_history", [])
+    history.append({"role": "user", "content": question})
+    reply, history = qwen.chat(history, context.user_data["qa_health_context"])
+    context.user_data["qa_history"] = history
+    context.user_data["qa_last_active"] = datetime.datetime.now(tz=datetime.timezone.utc)
+    await update.message.reply_text(reply)
 ```
 
 **新增 `cmd_ask_end`：**
@@ -143,12 +158,36 @@ async def cmd_ask_end(update, context):
     await update.message.reply_text("问答已结束。")
 ```
 
+**新增 `_qa_session_expired`：**
+```python
+_QA_TIMEOUT = datetime.timedelta(minutes=10)
+
+def _qa_session_expired(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    last_active = context.user_data.get("qa_last_active")
+    if last_active is None:
+        return True
+    return datetime.datetime.now(tz=datetime.timezone.utc) - last_active > _QA_TIMEOUT
+```
+
 **扩展 `handle_text`（在餐食确认逻辑之前）：**
 ```python
 # Q&A 续接：有活跃 history 且未超时
 if context.user_data.get("qa_history") and not _qa_session_expired(context):
-    # 调用 qwen.chat，更新 history
+    history = context.user_data["qa_history"]
+    history.append({"role": "user", "content": text})
+    reply, history = qwen.chat(history, context.user_data["qa_health_context"])
+    context.user_data["qa_history"] = history
+    context.user_data["qa_last_active"] = datetime.datetime.now(tz=datetime.timezone.utc)
+    await update.message.reply_text(reply)
     return
+```
+
+**扩展 `handle_photo`（在"识别中..."之前清除 Q&A session）：**
+```python
+# 用户发照片时终止 Q&A session
+context.user_data.pop("qa_history", None)
+context.user_data.pop("qa_health_context", None)
+context.user_data.pop("qa_last_active", None)
 ```
 
 ### 配置
@@ -164,6 +203,8 @@ QA_MODEL=qwen3-max
 DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY", "")
 QA_MODEL: str = os.getenv("QA_MODEL", "qwen3-max")
 ```
+
+**启动检查策略：** `DASHSCOPE_API_KEY` 不在启动时校验（`ANTHROPIC_API_KEY` 目前也无启动检查）。未配置时由 `_get_client()` 在首次调用时抛出 `RuntimeError`，`cmd_ask` 捕获后回复用户"服务暂不可用"。两个 key 的处理方式保持一致。
 
 ---
 
@@ -191,7 +232,7 @@ openai>=1.0.0
 ## 测试要点
 
 - `build_health_context`：各数据组合（全有、部分有、全无）
-- `qwen.chat`：mock API，验证 history 截断逻辑（>10 轮）
+- `qwen.chat`：mock API，验证 history 截断逻辑（>10 轮），验证返回 `tuple[str, list[dict]]`
 - `cmd_ask`：无参数时返回用法提示
 - `handle_text` 路由：Q&A 活跃时不走餐食确认；超时后走餐食确认
 - `handle_photo`：清除 Q&A session
