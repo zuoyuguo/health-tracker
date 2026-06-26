@@ -258,22 +258,22 @@ async def cmd_ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "用法：/ask <你的问题>，例如：/ask 我最近睡眠质量怎么样？"
         )
         return
-    if "qa_health_context" not in context.user_data:
-        with SessionLocal() as session:
-            context.user_data["qa_health_context"] = build_health_context(session)
-    history: list[dict] = context.user_data.get("qa_history", [])
-    history = list(history)
-    history.append({"role": "user", "content": question})
     try:
+        if "qa_health_context" not in context.user_data:
+            with SessionLocal() as session:
+                context.user_data["qa_health_context"] = build_health_context(session)
+        history: list[dict] = context.user_data.get("qa_history", [])
+        history = list(history)
+        history.append({"role": "user", "content": question})
         reply, history = qwen.chat(history, context.user_data["qa_health_context"])
+        context.user_data["qa_history"] = history
+        context.user_data["qa_last_active"] = datetime.datetime.now(
+            tz=datetime.timezone.utc
+        )
     except Exception:
-        logger.exception("Qwen chat failed in cmd_ask")
+        logger.exception("cmd_ask failed")
         await update.message.reply_text("回答失败，请稍后重试 🙏")
         return
-    context.user_data["qa_history"] = history
-    context.user_data["qa_last_active"] = datetime.datetime.now(
-        tz=datetime.timezone.utc
-    )
     await update.message.reply_text(reply)
 
 

@@ -61,6 +61,17 @@ def test_chat_truncates_history_beyond_10_rounds():
     assert new_history[0]["content"] == "q1"
 
 
+def test_chat_handles_none_content():
+    from bot import qwen
+    mock_resp = _make_response(None)
+    with patch("bot.qwen._get_client") as mock_get:
+        mock_client = MagicMock()
+        mock_get.return_value = mock_client
+        mock_client.chat.completions.create.return_value = mock_resp
+        reply, _ = qwen.chat([], "")
+    assert reply == "抱歉，未能获得回答，请稍后重试。"
+
+
 def test_get_client_raises_when_key_missing(monkeypatch):
     import config as cfg
     monkeypatch.setattr(cfg, "DASHSCOPE_API_KEY", "")

@@ -48,7 +48,7 @@ def chat(
         model=config.QA_MODEL,
         messages=messages,
     )
-    reply = response.choices[0].message.content
+    reply = response.choices[0].message.content or "抱歉，未能获得回答，请稍后重试。"
 
     updated = working + [{"role": "assistant", "content": reply}]
     return reply, updated
