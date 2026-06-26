@@ -23,7 +23,7 @@ def _get_client() -> OpenAI:
             raise RuntimeError("DASHSCOPE_API_KEY not configured")
         _client = OpenAI(
             api_key=config.DASHSCOPE_API_KEY,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            base_url=config.DASHSCOPE_BASE_URL,
         )
     return _client
 

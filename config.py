@@ -10,6 +10,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY", "")
+DASHSCOPE_BASE_URL: str = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 QA_MODEL: str = os.getenv("QA_MODEL", "qwen3-max")
 _raw_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 if _raw_chat_id:
