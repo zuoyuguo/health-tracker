@@ -35,7 +35,6 @@ def chat(
     working = list(history)
 
     # Truncate to _MAX_ROUNDS pairs (keep newest), then append the last user msg
-    # history already contains the new user message appended by the caller
     if len(working) > _MAX_ROUNDS * 2:
         working = working[-((_MAX_ROUNDS * 2)):]
 

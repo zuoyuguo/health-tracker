@@ -62,7 +62,6 @@ def test_chat_truncates_history_beyond_10_rounds():
 
 
 def test_get_client_raises_when_key_missing(monkeypatch):
-    import importlib
     import config as cfg
     monkeypatch.setattr(cfg, "DASHSCOPE_API_KEY", "")
     import bot.qwen as qwen_mod
