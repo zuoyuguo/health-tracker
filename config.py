@@ -9,6 +9,8 @@ GARMIN_TOKEN_PATH = os.getenv("GARMINTOKENS", os.path.expanduser("~/.garmin_toke
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY", "")
+QA_MODEL: str = os.getenv("QA_MODEL", "qwen3-max")
 _raw_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 if _raw_chat_id:
     try:
