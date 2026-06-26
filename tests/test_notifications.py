@@ -20,7 +20,7 @@ def test_send_alert_calls_send_message(monkeypatch):
         notif.send_alert("⚠️ 测试告警")
 
     mock_bot.send_message.assert_called_once_with(
-        chat_id="999", text="⚠️ 测试告警"
+        chat_id=999, text="⚠️ 测试告警"
     )
 
 

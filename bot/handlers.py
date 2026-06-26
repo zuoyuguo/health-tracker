@@ -23,9 +23,9 @@ MAX_PHOTO_BYTES = 5_000_000
 def require_owner(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not config.TELEGRAM_CHAT_ID:
+        if config.TELEGRAM_CHAT_ID is None:
             return
-        if update.effective_chat.id != int(config.TELEGRAM_CHAT_ID):
+        if update.effective_chat.id != config.TELEGRAM_CHAT_ID:
             return
         return await func(update, context)
     return wrapper

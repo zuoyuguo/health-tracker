@@ -192,7 +192,7 @@ _TEST_CHAT_ID = 123456789
 
 @pytest.fixture(autouse=True)
 def patch_chat_id(monkeypatch):
-    monkeypatch.setattr(_config, "TELEGRAM_CHAT_ID", str(_TEST_CHAT_ID))
+    monkeypatch.setattr(_config, "TELEGRAM_CHAT_ID", _TEST_CHAT_ID)
 
 
 def _make_update(text=None, has_photo=False, args=None):

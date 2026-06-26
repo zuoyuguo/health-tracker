@@ -9,6 +9,6 @@ async def _send(text: str) -> None:
 
 
 def send_alert(text: str) -> None:
-    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+    if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_CHAT_ID is None:
         return
     asyncio.run(_send(text))
