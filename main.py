@@ -7,6 +7,8 @@ from bot.handlers import (
     cmd_note,
     cmd_week,
     cmd_status,
+    cmd_ask,
+    cmd_ask_end,
 )
 from scheduler import create_scheduler
 
@@ -23,6 +25,8 @@ def create_app() -> Application:
     app.add_handler(CommandHandler("note", cmd_note))
     app.add_handler(CommandHandler("week", cmd_week))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("ask", cmd_ask))
+    app.add_handler(CommandHandler("ask_end", cmd_ask_end))
     return app
 
 
