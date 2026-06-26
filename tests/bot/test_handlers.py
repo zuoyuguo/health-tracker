@@ -507,6 +507,7 @@ async def test_cmd_ask_end_clears_session():
 
     assert "qa_history" not in context.user_data
     assert "qa_last_active" not in context.user_data
+    assert "qa_health_context" not in context.user_data
     update.message.reply_text.assert_called_once_with("问答已结束。")
 
 

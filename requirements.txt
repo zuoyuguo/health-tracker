@@ -1,7 +1,7 @@
 garminconnect==0.3.6
 python-dotenv==1.0.1
 pytest>=8.3.5
-pytest-asyncio>=0.21
+pytest-asyncio>=0.21,<1.0
 pytest-mock==3.14.0
 sqlalchemy==2.0.51
 alembic==1.18.4
