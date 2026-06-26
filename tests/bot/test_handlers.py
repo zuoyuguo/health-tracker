@@ -429,3 +429,176 @@ def test_cmd_week_sends_no_data_message_when_report_is_none(session):
 
     reply = update.message.reply_text.call_args[0][0]
     assert "无" in reply or "暂无" in reply
+
+
+# ── Q&A tests ──────────────────────────────────────────────────────────────
+
+import datetime as _dt
+
+
+def _make_update_context(text=None, args=None, chat_id=_TEST_CHAT_ID):
+    update = MagicMock()
+    update.effective_chat.id = chat_id
+    update.message.reply_text = AsyncMock()
+    update.message.text = text
+    update.message.date = _dt.datetime(2026, 6, 25, 12, 0, tzinfo=_dt.timezone.utc)
+    context = MagicMock()
+    context.args = args or []
+    context.user_data = {}
+    return update, context
+
+
+@pytest.mark.asyncio
+async def test_cmd_ask_no_args_shows_usage():
+    from bot.handlers import cmd_ask
+    update, context = _make_update_context(args=[])
+    await cmd_ask(update, context)
+    update.message.reply_text.assert_called_once()
+    assert "/ask" in update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_cmd_ask_calls_qwen_and_stores_history():
+    from bot.handlers import cmd_ask
+    update, context = _make_update_context(args=["我最近睡眠怎么样"])
+
+    with patch("bot.handlers.SessionLocal") as MockSession, \
+         patch("bot.handlers.build_health_context", return_value="健康数据") as mock_ctx, \
+         patch("bot.handlers.qwen") as mock_qwen:
+        mock_qwen.chat.return_value = ("睡眠还不错", [
+            {"role": "user", "content": "我最近睡眠怎么样"},
+            {"role": "assistant", "content": "睡眠还不错"},
+        ])
+        MockSession.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        await cmd_ask(update, context)
+
+    update.message.reply_text.assert_called_once_with("睡眠还不错")
+    assert context.user_data["qa_history"][-1]["role"] == "assistant"
+    assert "qa_last_active" in context.user_data
+    assert "qa_health_context" in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_cmd_ask_reuses_cached_health_context():
+    from bot.handlers import cmd_ask
+    update, context = _make_update_context(args=["继续问"])
+    context.user_data["qa_health_context"] = "已缓存的健康数据"
+    context.user_data["qa_history"] = []
+
+    with patch("bot.handlers.SessionLocal") as MockSession, \
+         patch("bot.handlers.build_health_context") as mock_ctx, \
+         patch("bot.handlers.qwen") as mock_qwen:
+        mock_qwen.chat.return_value = ("回答", [])
+        await cmd_ask(update, context)
+
+    mock_ctx.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cmd_ask_end_clears_session():
+    from bot.handlers import cmd_ask_end
+    update, context = _make_update_context()
+    context.user_data["qa_history"] = [{"role": "user", "content": "test"}]
+    context.user_data["qa_last_active"] = _dt.datetime.now(_dt.timezone.utc)
+    context.user_data["qa_health_context"] = "data"
+
+    await cmd_ask_end(update, context)
+
+    assert "qa_history" not in context.user_data
+    assert "qa_last_active" not in context.user_data
+    update.message.reply_text.assert_called_once_with("问答已结束。")
+
+
+def test_qa_session_expired_true_when_no_key():
+    from bot.handlers import _qa_session_expired
+    context = MagicMock()
+    context.user_data = {}
+    assert _qa_session_expired(context) is True
+
+
+def test_qa_session_expired_false_when_recent():
+    from bot.handlers import _qa_session_expired
+    context = MagicMock()
+    context.user_data = {
+        "qa_last_active": _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=2)
+    }
+    assert _qa_session_expired(context) is False
+
+
+def test_qa_session_expired_true_when_stale():
+    from bot.handlers import _qa_session_expired
+    context = MagicMock()
+    context.user_data = {
+        "qa_last_active": _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=11)
+    }
+    assert _qa_session_expired(context) is True
+
+
+@pytest.mark.asyncio
+async def test_handle_text_routes_to_qa_when_session_active():
+    from bot.handlers import handle_text
+    update, context = _make_update_context(text="运动量够吗")
+    context.user_data = {
+        "qa_history": [{"role": "user", "content": "睡眠怎么样"},
+                       {"role": "assistant", "content": "还不错"}],
+        "qa_health_context": "健康数据",
+        "qa_last_active": _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=1),
+    }
+
+    with patch("bot.handlers.qwen") as mock_qwen:
+        mock_qwen.chat.return_value = ("运动量够", [
+            {"role": "user", "content": "运动量够吗"},
+            {"role": "assistant", "content": "运动量够"},
+        ])
+        await handle_text(update, context)
+
+    mock_qwen.chat.assert_called_once()
+    update.message.reply_text.assert_called_once_with("运动量够")
+
+
+@pytest.mark.asyncio
+async def test_handle_text_falls_through_to_meal_when_qa_expired():
+    from bot.handlers import handle_text
+    update, context = _make_update_context(text="确认")
+    context.user_data = {
+        "qa_history": [{"role": "user", "content": "q"}],
+        "qa_last_active": _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=15),
+    }
+
+    with patch("bot.handlers.qwen") as mock_qwen:
+        await handle_text(update, context)
+
+    mock_qwen.chat.assert_not_called()
+    update.message.reply_text.assert_called_once_with("没有待确认的记录，请重新发送食物照片")
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_clears_qa_session():
+    from bot.handlers import handle_photo
+    update = MagicMock()
+    update.effective_chat.id = _TEST_CHAT_ID
+    update.message.reply_text = AsyncMock()
+    update.message.date = _dt.datetime(2026, 6, 25, 12, 0, tzinfo=_dt.timezone.utc)
+    photo_mock = MagicMock()
+    photo_mock.file_size = 100
+    photo_mock.file_id = "fid"
+    update.message.photo = [photo_mock]
+    context = MagicMock()
+    context.user_data = {
+        "qa_history": [{"role": "user", "content": "q"}],
+        "qa_health_context": "data",
+        "qa_last_active": _dt.datetime.now(_dt.timezone.utc),
+    }
+
+    mock_file = MagicMock()
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"img"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    with patch("bot.handlers.analyze_food_photo", return_value={"foods": [], "total_calories": 0,
+               "total_protein_g": 0, "total_carbs_g": 0, "total_fat_g": 0}):
+        await handle_photo(update, context)
+
+    assert "qa_history" not in context.user_data
+    assert "qa_health_context" not in context.user_data
+    assert "qa_last_active" not in context.user_data

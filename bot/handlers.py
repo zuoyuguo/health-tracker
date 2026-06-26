@@ -8,6 +8,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 import config
+from bot import qwen
+from bot.health_context import build_health_context
 from bot.vision import analyze_food_photo, apply_correction
 from db.base import SessionLocal
 from db.models import Meal, Sleep, Activity, BodyMetric
@@ -18,6 +20,15 @@ logger = logging.getLogger(__name__)
 PENDING_MEAL_KEY = "pending_meal"
 MAX_NOTE_LENGTH = 500
 MAX_PHOTO_BYTES = 5_000_000
+
+_QA_TIMEOUT = datetime.timedelta(minutes=10)
+
+
+def _qa_session_expired(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    last_active = context.user_data.get("qa_last_active")
+    if last_active is None:
+        return True
+    return datetime.datetime.now(tz=datetime.timezone.utc) - last_active > _QA_TIMEOUT
 
 
 def require_owner(func):
@@ -110,6 +121,9 @@ def get_today_summary(session, date: datetime.date) -> str:
 @require_owner
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("识别中...")
+    context.user_data.pop("qa_history", None)
+    context.user_data.pop("qa_health_context", None)
+    context.user_data.pop("qa_last_active", None)
     photo = update.message.photo[-1]
     if photo.file_size and photo.file_size > MAX_PHOTO_BYTES:
         await update.message.reply_text("图片太大，请压缩后重试")
@@ -132,6 +146,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 @require_owner
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (update.message.text or "").strip()[:MAX_NOTE_LENGTH]
+    if context.user_data.get("qa_history") and not _qa_session_expired(context):
+        history: list[dict] = list(context.user_data["qa_history"])
+        history.append({"role": "user", "content": text})
+        try:
+            reply, history = qwen.chat(
+                history, context.user_data.get("qa_health_context", "")
+            )
+        except Exception:
+            logger.exception("Qwen chat failed in handle_text")
+            await update.message.reply_text("回答失败，请稍后重试 🙏")
+            return
+        context.user_data["qa_history"] = history
+        context.user_data["qa_last_active"] = datetime.datetime.now(
+            tz=datetime.timezone.utc
+        )
+        await update.message.reply_text(reply)
+        return
     pending = context.user_data.get(PENDING_MEAL_KEY)
     if not pending:
         if text == "确认":
@@ -217,3 +248,38 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         f"Renpho 体重：{_fmt(last_metric.created_at if last_metric else None)}",
     ]
     await update.message.reply_text("\n".join(lines))
+
+
+@require_owner
+async def cmd_ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    question = " ".join(context.args).strip() if context.args else ""
+    if not question:
+        await update.message.reply_text(
+            "用法：/ask <你的问题>，例如：/ask 我最近睡眠质量怎么样？"
+        )
+        return
+    if "qa_health_context" not in context.user_data:
+        with SessionLocal() as session:
+            context.user_data["qa_health_context"] = build_health_context(session)
+    history: list[dict] = context.user_data.get("qa_history", [])
+    history = list(history)
+    history.append({"role": "user", "content": question})
+    try:
+        reply, history = qwen.chat(history, context.user_data["qa_health_context"])
+    except Exception:
+        logger.exception("Qwen chat failed in cmd_ask")
+        await update.message.reply_text("回答失败，请稍后重试 🙏")
+        return
+    context.user_data["qa_history"] = history
+    context.user_data["qa_last_active"] = datetime.datetime.now(
+        tz=datetime.timezone.utc
+    )
+    await update.message.reply_text(reply)
+
+
+@require_owner
+async def cmd_ask_end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("qa_history", None)
+    context.user_data.pop("qa_last_active", None)
+    context.user_data.pop("qa_health_context", None)
+    await update.message.reply_text("问答已结束。")
