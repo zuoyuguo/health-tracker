@@ -15,7 +15,6 @@ def ensure_token_file() -> None:
     token_dir = get_token_path()
     os.makedirs(token_dir, exist_ok=True)
     token_file = os.path.join(token_dir, "garmin_tokens.json")
-    if not os.path.exists(token_file):
-        with open(token_file, "w") as f:
-            f.write(token_json)
+    with open(token_file, "w") as f:
+        f.write(token_json)
 
