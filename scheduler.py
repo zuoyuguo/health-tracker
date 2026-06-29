@@ -126,8 +126,8 @@ def weekly_report_job() -> None:
 def create_scheduler() -> BackgroundScheduler:
     tz = pytz.timezone(config.TIMEZONE)
     scheduler = BackgroundScheduler(timezone=tz)
-    scheduler.add_job(garmin_sync_job, "cron", hour=9, minute=0, max_instances=1)
-    scheduler.add_job(renpho_sync_job, "cron", hour=9, minute=0, max_instances=1)
+    scheduler.add_job(garmin_sync_job, "cron", hour=10, minute=0, max_instances=1)
+    scheduler.add_job(renpho_sync_job, "cron", hour=10, minute=0, max_instances=1)
     scheduler.add_job(garmin_activity_evening_job, "cron", hour=21, minute=30, max_instances=1)
     scheduler.add_job(daily_report_job, "cron", hour=22, minute=0, max_instances=1)
     scheduler.add_job(weekly_report_job, "cron", day_of_week="mon", hour=8, minute=0, max_instances=1)
